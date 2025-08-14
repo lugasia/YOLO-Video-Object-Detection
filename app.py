@@ -306,7 +306,7 @@ def main():
     )
     
     # Show model info
-    if "x" in selected_model:
+    if "x" in model_option:
         st.sidebar.markdown('<span class="yolo11-badge">🚀 Best Accuracy</span>', unsafe_allow_html=True)
     
     # Confidence threshold

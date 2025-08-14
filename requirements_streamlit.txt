@@ -1,0 +1,22 @@
+# Streamlit Cloud Requirements - Exact versions to avoid conflicts
+streamlit==1.28.1
+ultralytics==8.3.179
+
+# Computer vision - compatible versions
+opencv-python==4.8.1.78
+pillow==10.0.1
+
+# Data processing - compatible with Python 3.13
+numpy==1.24.3
+pandas==2.0.3
+
+# Visualization
+plotly==5.17.0
+
+# PyTorch - CPU version for Streamlit Cloud
+torch==2.0.1
+torchvision==0.15.2
+
+# Additional utilities
+requests==2.31.0
+tqdm==4.66.1

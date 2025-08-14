@@ -3,8 +3,13 @@
 ## ✅ **CRITICAL: Use Correct App File**
 
 ### **Main App File for Deployment**
-- **File**: `streamlit_app.py` (now contains the working version)
+- **File**: `streamlit_app_cloud.py` (Streamlit Cloud optimized version)
+- **Alternative**: `streamlit_app.py` (working version)
 - **Alternative**: `streamlit_app_main.py` (same working version)
+
+### **Requirements File**
+- **File**: `requirements_streamlit.txt` (exact versions for Streamlit Cloud)
+- **Alternative**: `requirements.txt` (flexible versions)
 
 ### **What Was Fixed**
 - ❌ **OLD**: `streamlit_app.py` had mock detection system
@@ -21,8 +26,10 @@ Visit: https://streamlit.io/cloud
 
 ### 3. **Deploy Your App**
 - **Repository**: `lugasia/YOLO-Video-Object-Detection`
-- **Main file path**: `streamlit_app.py` (or `streamlit_app_main.py`)
+- **Main file path**: `streamlit_app_cloud.py` (recommended for Streamlit Cloud)
+- **Alternative**: `streamlit_app.py` or `streamlit_app_main.py`
 - **Python version**: 3.8+
+- **Requirements**: `requirements_streamlit.txt` (for exact versions)
 
 ### 4. **Configuration**
 - **App URL**: Will be provided by Streamlit Cloud

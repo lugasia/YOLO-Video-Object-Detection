@@ -291,7 +291,7 @@ def main():
                 else:
                     st.info("No objects detected")
             
-            # Show output file location
+            # Show output file location and download button
             st.subheader("📁 Output Files")
             output_path = "excavator_streamlit_results/detections"
             if os.path.exists(output_path):
@@ -299,9 +299,40 @@ def main():
                 for file in files:
                     if file.endswith('.mp4'):
                         st.success(f"✅ Processed video saved: {output_path}/{file}")
-                        st.info("You can download this file from your file system")
+                        
+                        # Download button for the processed video
+                        video_file_path = os.path.join(output_path, file)
+                        if os.path.exists(video_file_path):
+                            with open(video_file_path, "rb") as video_file:
+                                video_bytes = video_file.read()
+                            
+                            col1, col2 = st.columns([2, 1])
+                            with col1:
+                                st.download_button(
+                                    label="📥 Download Detected Video",
+                                    data=video_bytes,
+                                    file_name=f"excavator_detection_{st.session_state.get('video_name', 'video.mp4')}",
+                                    mime="video/mp4",
+                                    help="Download the processed video with construction equipment detection"
+                                )
+                            with col2:
+                                file_size_mb = len(video_bytes) / (1024 * 1024)
+                                st.metric("File Size", f"{file_size_mb:.1f} MB")
+                        else:
+                            st.warning("Video file not found")
             else:
                 st.warning("Output files not found")
+            
+            # Download JSON results
+            st.subheader("📊 Download Detection Results")
+            results_json = json.dumps(results, indent=2)
+            st.download_button(
+                label="📄 Download JSON Results",
+                data=results_json,
+                file_name=f"excavator_results_{st.session_state.get('video_name', 'video').replace('.', '_')}.json",
+                mime="application/json",
+                help="Download detailed construction equipment detection results in JSON format"
+            )
         
         else:
             st.info("Please upload and process a video first to see results.")

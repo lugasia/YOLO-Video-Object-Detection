@@ -235,6 +235,41 @@ def main():
                         })
                     
                     st.table(freq_data)
+                
+                # Download section
+                st.subheader("📥 Download Results")
+                
+                # Download JSON results
+                if 'summary' in st.session_state:
+                    results_json = json.dumps(st.session_state.summary, indent=2)
+                    st.download_button(
+                        label="📄 Download JSON Results",
+                        data=results_json,
+                        file_name=f"detection_results_{st.session_state.get('video_name', 'video').replace('.', '_')}.json",
+                        mime="application/json",
+                        help="Download detailed detection results in JSON format"
+                    )
+                
+                # Download processed video if available
+                output_path = "output_detected_video.mp4"
+                if os.path.exists(output_path):
+                    with open(output_path, "rb") as video_file:
+                        video_bytes = video_file.read()
+                    
+                    col1, col2 = st.columns([2, 1])
+                    with col1:
+                        st.download_button(
+                            label="🎬 Download Detected Video",
+                            data=video_bytes,
+                            file_name=f"detected_{st.session_state.get('video_name', 'video.mp4')}",
+                            mime="video/mp4",
+                            help="Download the processed video with object detection annotations"
+                        )
+                    with col2:
+                        file_size_mb = len(video_bytes) / (1024 * 1024)
+                        st.metric("File Size", f"{file_size_mb:.1f} MB")
+                else:
+                    st.info("Processed video not found. Video processing may still be in progress.")
         
         else:
             st.info("Please process a video first to see analysis results.")

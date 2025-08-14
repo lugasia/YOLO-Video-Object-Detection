@@ -308,6 +308,36 @@ def main():
                             🚂 **Note:** These 'train' detections might actually be **excavators** or other construction equipment!
                             YOLOv8 often misclassifies large construction machinery as trains due to similar visual characteristics.
                             """)
+                
+                # Download button for construction analysis
+                st.subheader("📥 Download Processed Video")
+                output_path = "inteli_ai_results/detections"
+                if os.path.exists(output_path):
+                    files = [f for f in os.listdir(output_path) if f.endswith('.mp4')]
+                    if files:
+                        video_file_path = os.path.join(output_path, files[0])
+                        if os.path.exists(video_file_path):
+                            with open(video_file_path, "rb") as video_file:
+                                video_bytes = video_file.read()
+                            
+                            col1, col2 = st.columns([2, 1])
+                            with col1:
+                                st.download_button(
+                                    label="🎬 Download Detected Video",
+                                    data=video_bytes,
+                                    file_name=f"construction_detection_{st.session_state.get('video_name', 'video.mp4')}",
+                                    mime="video/mp4",
+                                    help="Download the processed video with construction equipment detection"
+                                )
+                            with col2:
+                                file_size_mb = len(video_bytes) / (1024 * 1024)
+                                st.metric("File Size", f"{file_size_mb:.1f} MB")
+                        else:
+                            st.warning("Video file not found")
+                    else:
+                        st.warning("No processed video found")
+                else:
+                    st.warning("Output directory not found")
             else:
                 st.info("No construction equipment detected. Try lowering the confidence threshold.")
         else:
@@ -344,7 +374,7 @@ def main():
                 else:
                     st.info("No objects detected")
             
-            # Show output file location
+            # Show output file location and download button
             st.subheader("📁 Output Files")
             output_path = "inteli_ai_results/detections"
             if os.path.exists(output_path):
@@ -352,7 +382,38 @@ def main():
                 for file in files:
                     if file.endswith('.mp4'):
                         st.success(f"✅ Processed video saved: {output_path}/{file}")
-                        st.info("You can download this file from your file system")
+                        
+                        # Download button for the processed video
+                        video_file_path = os.path.join(output_path, file)
+                        if os.path.exists(video_file_path):
+                            with open(video_file_path, "rb") as video_file:
+                                video_bytes = video_file.read()
+                                
+                            # Create download button
+                            st.download_button(
+                                label="📥 Download Detected Video",
+                                data=video_bytes,
+                                file_name=f"detected_{st.session_state.get('video_name', 'video.mp4')}",
+                                mime="video/mp4",
+                                help="Download the processed video with object detection annotations"
+                            )
+                            
+                            # Show file info
+                            file_size_mb = len(video_bytes) / (1024 * 1024)
+                            st.info(f"📊 File size: {file_size_mb:.2f} MB")
+                        else:
+                            st.warning("Video file not found")
+                
+                # Download JSON results
+                st.subheader("📊 Download Detection Results")
+                results_json = json.dumps(results, indent=2)
+                st.download_button(
+                    label="📄 Download JSON Results",
+                    data=results_json,
+                    file_name=f"detection_results_{st.session_state.get('video_name', 'video').replace('.', '_')}.json",
+                    mime="application/json",
+                    help="Download detailed detection results in JSON format"
+                )
             else:
                 st.warning("Output files not found")
         

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-YOLO Video Object Detection App - Streamlit Cloud Optimized Version
-Simplified imports and error handling for cloud deployment
+YOLO Video Object Detection App - Clean Version
+Fixed for Streamlit Cloud compatibility
 """
 
 import streamlit as st
@@ -18,7 +18,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS with logo styling
+# Custom CSS with logo styling - removed black background
 st.markdown("""
 <style>
     .logo-container {
@@ -27,9 +27,8 @@ st.markdown("""
         justify-content: center;
         margin-bottom: 2rem;
         padding: 1rem;
-        background: black;
+        background: transparent;
         border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     .logo-image {
         width: 200px;
@@ -75,7 +74,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def display_logo():
-    """Display the Inteli AI logo with original black background"""
+    """Display the Inteli AI logo with transparent background"""
     try:
         # Load and display logo
         logo_path = "inteli-ai-black.webp"
@@ -116,8 +115,12 @@ def get_construction_mapping():
 
 @st.cache_resource
 def load_yolo_model(model_name="yolov8n.pt"):
-    """Load YOLO model with automatic download"""
+    """Load YOLO model with automatic download - fixed for libGL.so.1 error"""
     try:
+        # Set environment variables to avoid OpenCV GUI issues
+        os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
+        os.environ['OPENCV_VIDEOIO_DEBUG'] = '0'
+        
         # Import YOLO only when needed
         from ultralytics import YOLO
         
@@ -127,6 +130,10 @@ def load_yolo_model(model_name="yolov8n.pt"):
         return model
     except Exception as e:
         st.error(f"Error loading model {model_name}: {e}")
+        # Try with a smaller model if the selected one fails
+        if model_name != "yolov8n.pt":
+            st.info("Trying with yolov8n.pt instead...")
+            return load_yolo_model("yolov8n.pt")
         return None
 
 def check_model_status():

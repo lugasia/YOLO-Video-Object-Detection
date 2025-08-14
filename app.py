@@ -275,16 +275,7 @@ def main():
     # Check model status
     check_model_status()
     
-    # Important notice
-    st.markdown("""
-    <div class="construction-alert">
-        <h4>⚠️ Important Notice</h4>
-        <p>YOLO may classify construction equipment (excavators, bulldozers, etc.) as similar objects like "train" or "truck". 
-        This is normal behavior for general-purpose object detection models.</p>
-        <p><strong>💡 Tip:</strong> Look for "train" detections - these might actually be excavators!</p>
-        <p><strong>🚀 Latest:</strong> YOLOv8 models provide excellent accuracy for all use cases!</p>
-    </div>
-    """, unsafe_allow_html=True)
+
     
     # Sidebar
     st.sidebar.title("⚙️ Settings")

@@ -1,22 +1,22 @@
-# Streamlit Cloud Requirements - Exact versions for compatibility
-streamlit==1.28.1
-ultralytics==8.3.179
+# Core dependencies
+streamlit>=1.25.0
+ultralytics>=8.3.0
 
-# Computer vision - headless version to avoid libGL.so.1 error
-opencv-python-headless==4.8.1.78
-pillow==10.0.1
+# Computer vision
+opencv-python-headless>=4.8.0
+pillow>=9.0.0
 
-# Data processing - exact versions to avoid conflicts
-numpy==1.24.3
-pandas==2.0.3
+# Data processing
+numpy>=1.21.0,<2.0.0
+pandas>=1.5.0
 
 # Visualization
-plotly==5.17.0
+plotly>=5.0.0
 
-# PyTorch - CPU version for Streamlit Cloud
-torch==2.0.1
-torchvision==0.15.2
+# PyTorch
+torch>=2.0.0
+torchvision>=0.15.0
 
-# Additional utilities
-requests==2.31.0
-tqdm==4.66.1
+# Utilities
+requests>=2.25.0
+tqdm>=4.64.0

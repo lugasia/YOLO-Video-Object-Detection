@@ -18,26 +18,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# Check and install required packages
-def ensure_dependencies():
-    """Ensure all required packages are installed"""
+# Check required packages
+def check_dependencies():
+    """Check if required packages are available"""
     try:
         import ultralytics
         return True
     except ImportError:
-        st.error("❌ Ultralytics not found. Installing...")
-        try:
-            import subprocess
-            import sys
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "ultralytics==8.3.179"])
-            st.success("✅ Ultralytics installed successfully!")
-            return True
-        except Exception as e:
-            st.error(f"❌ Failed to install ultralytics: {e}")
-            return False
+        st.error("❌ Ultralytics not found. Please check requirements_streamlit.txt")
+        st.info("💡 Make sure ultralytics is listed in requirements_streamlit.txt")
+        return False
 
-# Ensure dependencies are available
-if not ensure_dependencies():
+# Check dependencies are available
+if not check_dependencies():
     st.stop()
 
 # Custom CSS with logo styling - removed black background
@@ -143,16 +136,8 @@ def load_yolo_model(model_name="yolov8n.pt"):
         os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
         os.environ['OPENCV_VIDEOIO_DEBUG'] = '0'
         
-        # Try to import ultralytics with better error handling
-        try:
-            from ultralytics import YOLO
-        except ImportError as import_error:
-            st.error(f"❌ Ultralytics not installed: {import_error}")
-            st.info("💡 Installing ultralytics...")
-            import subprocess
-            import sys
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "ultralytics==8.3.179"])
-            from ultralytics import YOLO
+        # Import ultralytics
+        from ultralytics import YOLO
         
         # Load the model directly - YOLO will download if needed
         with st.spinner(f"🔄 Loading {model_name}..."):

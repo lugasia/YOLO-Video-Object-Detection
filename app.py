@@ -162,8 +162,7 @@ def check_model_status():
         models_dir = Path("models")
         
         available_models = []
-        all_models = ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
-                      "yolov11n.pt", "yolov11s.pt", "yolov11m.pt", "yolov11l.pt", "yolov11x.pt"]
+        all_models = ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"]
         
         for model_name in all_models:
             # Check multiple possible locations
@@ -176,7 +175,7 @@ def check_model_status():
             for path in possible_paths:
                 if path.exists():
                     size = path.stat().st_size / (1024 * 1024)  # Size in MB
-                    version_badge = "YOLOv11" if "11" in model_name else "YOLOv8"
+                    version_badge = "YOLOv8"
                     available_models.append(f"{model_name} ({size:.1f}MB) [{version_badge}]")
                     break
         
@@ -259,7 +258,7 @@ def process_video_with_yolo(video_file, confidence=0.5, model_name="yolov8n.pt")
             'processing_time': processing_time,
             'total_frames': len(results),
             'model_used': model_name,
-            'model_version': 'YOLOv11' if '11' in model_name else 'YOLOv8'
+            'model_version': 'YOLOv8'
         }, results
         
     except Exception as e:
@@ -283,37 +282,32 @@ def main():
         <p>YOLO may classify construction equipment (excavators, bulldozers, etc.) as similar objects like "train" or "truck". 
         This is normal behavior for general-purpose object detection models.</p>
         <p><strong>💡 Tip:</strong> Look for "train" detections - these might actually be excavators!</p>
-        <p><strong>🚀 New:</strong> YOLOv11 models are now available for even better accuracy!</p>
+        <p><strong>🚀 Latest:</strong> YOLOv8 models provide excellent accuracy for all use cases!</p>
     </div>
     """, unsafe_allow_html=True)
     
     # Sidebar
     st.sidebar.title("⚙️ Settings")
     
-    # Model selection with YOLOv11 support
+    # Model selection - YOLOv8 models only (YOLOv11 not yet available)
     model_options = [
         ("yolov8n.pt", "YOLOv8 Nano (6.2MB) - Fastest"),
         ("yolov8s.pt", "YOLOv8 Small (21.5MB) - Balanced"),
         ("yolov8m.pt", "YOLOv8 Medium (52.2MB) - Better Accuracy"),
         ("yolov8l.pt", "YOLOv8 Large (87.7MB) - High Accuracy"),
-        ("yolov8x.pt", "YOLOv8 XLarge (136.2MB) - Best Accuracy"),
-        ("yolov11n.pt", "YOLOv11 Nano (7.1MB) - Latest & Fastest"),
-        ("yolov11s.pt", "YOLOv11 Small (22.1MB) - Latest & Balanced"),
-        ("yolov11m.pt", "YOLOv11 Medium (52.8MB) - Latest & Better"),
-        ("yolov11l.pt", "YOLOv11 Large (88.3MB) - Latest & High Accuracy"),
-        ("yolov11x.pt", "YOLOv11 XLarge (137.1MB) - Latest & Best")
+        ("yolov8x.pt", "YOLOv8 XLarge (136.2MB) - Best Accuracy")
     ]
     
     model_option = st.sidebar.selectbox(
         "Select YOLO Model",
         options=[opt[0] for opt in model_options],
         format_func=lambda x: next(opt[1] for opt in model_options if opt[0] == x),
-        help="YOLOv11 models are the latest and most accurate. Models download automatically."
+        help="YOLOv8 models provide excellent accuracy. Models download automatically."
     )
     
-    # Show YOLOv11 badge if selected
-    if "11" in model_option:
-        st.sidebar.markdown('<span class="yolo11-badge">🚀 YOLOv11</span>', unsafe_allow_html=True)
+    # Show model info
+    if "x" in selected_model:
+        st.sidebar.markdown('<span class="yolo11-badge">🚀 Best Accuracy</span>', unsafe_allow_html=True)
     
     # Confidence threshold
     confidence = st.sidebar.slider(
@@ -370,7 +364,7 @@ def main():
                         fps = results['total_frames'] / results['processing_time']
                         st.metric("FPS", f"{fps:.1f}")
                     with col4:
-                        version_badge = "YOLOv11" if "11" in results['model_used'] else "YOLOv8"
+                        version_badge = "YOLOv8"
                         st.metric("Model", f"{results['model_used'].split('.')[0]} [{version_badge}]")
     
     with tab2:
@@ -437,7 +431,7 @@ def main():
                 with col3:
                     st.metric("Model Used", results['model_used'])
                 with col4:
-                    version_badge = "YOLOv11" if "11" in results['model_used'] else "YOLOv8"
+                    version_badge = "YOLOv8"
                     st.metric("Version", version_badge)
                 
                 # Show results location
@@ -456,18 +450,18 @@ def main():
         **Inteli AI** provides cutting-edge AI solutions for computer vision applications.
         
         ### 🚀 Features
-        - **Real-time Object Detection**: Using state-of-the-art YOLOv8 & YOLOv11 models
+        - **Real-time Object Detection**: Using state-of-the-art YOLOv8 models
         - **Construction Equipment Recognition**: Specialized detection for construction sites
         - **Automatic Model Management**: Models download and cache automatically
         - **Professional Interface**: Clean, modern UI with Inteli AI branding
         
         ### 🛠️ Technology
-        - **YOLOv8 & YOLOv11**: Latest object detection models
+        - **YOLOv8**: Latest object detection models
         - **Streamlit**: Modern web application framework
         - **OpenCV**: Computer vision processing
         - **Ultralytics**: YOLO framework
         
-        ### 🆕 YOLOv11 Features
+        ### 🆕 YOLOv8 Features
         - **Improved Accuracy**: Better detection performance
         - **Faster Processing**: Optimized inference speed
         - **Enhanced Training**: Better model training capabilities

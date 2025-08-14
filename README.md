@@ -16,7 +16,7 @@ A clean, production-ready video object detection system using YOLOv8 and YOLOv11
 4. **Deploy the app**:
    - Repository: `your-username/YOLO-Video-Object-Detection`
    - Main file path: `app.py`
-   - Requirements file: `requirements_streamlit.txt`
+   - Requirements file: `requirements.txt` (automatic)
    - Python version: 3.8+
 
 ### Local Installation
@@ -27,7 +27,7 @@ git clone https://github.com/lugasia/YOLO-Video-Object-Detection.git
 cd YOLO-Video-Object-Detection
 
 # Install dependencies
-pip install -r requirements_streamlit.txt
+pip install -r requirements.txt
 
 # Run the app
 streamlit run app.py
@@ -53,7 +53,7 @@ streamlit run app.py
 ```
 YOLO-Video-Object-Detection/
 ├── app.py                    # Main application
-├── requirements_streamlit.txt # Dependencies
+├── requirements.txt          # Dependencies
 ├── inteli-ai-black.webp     # Company logo
 ├── README.md                # This file
 ├── .gitignore               # Git ignore rules

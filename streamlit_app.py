@@ -19,7 +19,7 @@ import shutil
 
 # Page configuration
 st.set_page_config(
-    page_title="Inteli AI - Video Object Detection",
+    page_title="InteliATE - Video Object Detection",
     page_icon="🎥",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -101,7 +101,7 @@ def get_image_base64(image_path):
         return ""
 
 def display_logo():
-    """Display the Inteli AI logo"""
+    """Display the InteliATE logo"""
     try:
         logo_path = "inteli-ai-black.webp"
         if os.path.exists(logo_path):
@@ -124,9 +124,17 @@ def get_available_models():
     
     for model_file in model_files:
         if os.path.exists(model_file):
-            models.append(model_file)
+            # Get file size for display
+            file_size = os.path.getsize(model_file) / (1024*1024)  # MB
+            models.append(f"{model_file} ({file_size:.1f}MB)")
     
     return models
+
+def get_model_filename(model_option):
+    """Extract the actual model filename from the display option"""
+    if "(" in model_option:
+        return model_option.split(" (")[0]
+    return model_option
 
 def create_mock_detection_results(video_name, confidence_threshold=0.5):
     """Create mock detection results for demonstration when YOLO is not available"""
@@ -401,9 +409,14 @@ def main():
             help="Choose the YOLO model. Larger models are more accurate but slower."
         )
         st.sidebar.success(f"✅ {len(available_models)} YOLO model(s) available")
+        
+        # Show model info
+        model_filename = get_model_filename(model_option)
+        st.sidebar.info(f"Selected: {model_filename}")
     else:
         model_option = "mock"
         st.sidebar.warning("⚠️ No YOLO models found. Using mock detection.")
+        st.sidebar.info("💡 Models may be available locally but not on Streamlit Cloud")
     
     # Confidence threshold
     confidence_threshold = st.sidebar.slider(
@@ -436,8 +449,10 @@ def main():
             # Process button
             if st.button("🚀 Detect Objects", type="primary"):
                 with st.spinner("Processing video..."):
+                    # Get actual model filename for processing
+                    model_filename = get_model_filename(model_option)
                     summary, results, output_dir = process_video_stream(
-                        uploaded_file, confidence_threshold, model_option
+                        uploaded_file, confidence_threshold, model_filename
                     )
                 
                 if summary:
@@ -541,7 +556,7 @@ def main():
         st.header("ℹ️ About This System")
         
         st.markdown("""
-        ### 🎯 Inteli AI Video Object Detection System
+        ### 🎯 InteliATE Video Object Detection Demo System
         
         This system provides advanced object detection for video files using state-of-the-art YOLO models.
         
@@ -595,7 +610,7 @@ def main():
     # Footer
     st.markdown("""
     <div class="footer">
-        <p><strong>Inteli AI Video Object Detection System</strong></p>
+        <p><strong>InteliATE Video Object Detection Demo System</strong></p>
         <p>Powered by YOLO and Streamlit</p>
     </div>
     """, unsafe_allow_html=True)

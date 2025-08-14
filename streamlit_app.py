@@ -1,5 +1,10 @@
+#!/usr/bin/env python3
+"""
+YOLO Video Object Detection App - Fixed Version
+No OpenCV dependency to avoid NumPy compatibility issues on Streamlit Cloud
+"""
+
 import streamlit as st
-import cv2
 import numpy as np
 from ultralytics import YOLO
 import time
@@ -9,7 +14,6 @@ from PIL import Image
 import json
 import plotly.express as px
 import plotly.graph_objects as go
-from yolo_video_detector import YOLOVideoDetector
 
 # Page configuration
 st.set_page_config(
@@ -40,6 +44,20 @@ st.markdown("""
         padding: 1rem;
         margin: 1rem 0;
     }
+    .success-box {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    .info-box {
+        background-color: #d1ecf1;
+        border: 1px solid #bee5eb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -53,28 +71,73 @@ def load_yolo_model(model_path="yolov8n.pt"):
         st.error(f"Error loading model: {e}")
         return None
 
-def process_video_stream(video_file, confidence_threshold=0.5):
-    """Process uploaded video file"""
+def process_video_stream(video_file, confidence_threshold=0.5, model_name="yolov8n.pt"):
+    """Process uploaded video file using ultralytics directly"""
     # Create temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
         tmp_file.write(video_file.read())
         temp_video_path = tmp_file.name
     
     try:
-        # Initialize detector
-        detector = YOLOVideoDetector(confidence_threshold=confidence_threshold)
+        # Load model
+        model = load_yolo_model(model_name)
+        if model is None:
+            return None, None, None
         
-        # Process video
-        output_path = "temp_output.mp4"
-        detector.process_video_file(temp_video_path, output_path)
+        # Process video with ultralytics
+        start_time = time.time()
+        results = model.predict(
+            temp_video_path,
+            conf=confidence_threshold,
+            save=True,
+            project="streamlit_results",
+            name="detections"
+        )
+        processing_time = time.time() - start_time
         
-        # Get results
-        summary = detector.get_detection_summary()
+        # Analyze results
+        total_detections = 0
+        class_counts = {}
+        frame_analysis = {}
+        
+        for i, result in enumerate(results):
+            if result.boxes is not None:
+                detections_in_frame = len(result.boxes)
+                total_detections += detections_in_frame
+                
+                frame_detections = []
+                for box in result.boxes:
+                    class_id = int(box.cls[0].cpu().numpy())
+                    class_name = model.names[class_id]
+                    confidence_score = float(box.conf[0].cpu().numpy())
+                    
+                    # Count all detections
+                    class_counts[class_name] = class_counts.get(class_name, 0) + 1
+                    
+                    # Store frame-level detection
+                    frame_detections.append({
+                        'class': class_name,
+                        'confidence': confidence_score,
+                        'bbox': box.xyxy[0].cpu().numpy().tolist()
+                    })
+                
+                frame_analysis[i] = frame_detections
+        
+        # Create summary
+        summary = {
+            'total_detections': total_detections,
+            'total_frames': len(results),
+            'processing_time': processing_time,
+            'fps': len(results) / processing_time,
+            'class_counts': class_counts,
+            'frame_analysis': frame_analysis,
+            'model_used': model_name
+        }
         
         # Clean up temporary input file
         os.unlink(temp_video_path)
         
-        return detector, summary, output_path
+        return summary, results, "streamlit_results/detections"
         
     except Exception as e:
         st.error(f"Error processing video: {e}")
@@ -82,12 +145,64 @@ def process_video_stream(video_file, confidence_threshold=0.5):
             os.unlink(temp_video_path)
         return None, None, None
 
+def create_detection_chart(class_counts):
+    """Create a bar chart of detections"""
+    if not class_counts:
+        return None
+    
+    # Prepare data for plotting
+    classes = list(class_counts.keys())
+    counts = list(class_counts.values())
+    
+    # Create bar chart
+    fig = px.bar(
+        x=classes,
+        y=counts,
+        title="Object Detection Results",
+        labels={'x': 'Object Class', 'y': 'Number of Detections'},
+        color=counts,
+        color_continuous_scale='viridis'
+    )
+    
+    fig.update_layout(
+        xaxis_tickangle=-45,
+        height=400
+    )
+    
+    return fig
+
+def create_confidence_distribution(frame_analysis):
+    """Create confidence distribution chart"""
+    if not frame_analysis:
+        return None
+    
+    # Collect all confidence scores
+    confidences = []
+    for frame_data in frame_analysis.values():
+        for det in frame_data:
+            confidences.append(det['confidence'])
+    
+    if not confidences:
+        return None
+    
+    # Create histogram
+    fig = px.histogram(
+        x=confidences,
+        title="Confidence Score Distribution",
+        labels={'x': 'Confidence Score', 'y': 'Number of Detections'},
+        nbins=20
+    )
+    
+    fig.update_layout(height=400)
+    
+    return fig
+
 def main():
     # Header
     st.markdown('<h1 class="main-header">🎥 YOLO Video Object Detection</h1>', unsafe_allow_html=True)
     
     # Sidebar
-    st.sidebar.title("Settings")
+    st.sidebar.title("⚙️ Settings")
     
     # Model selection
     model_option = st.sidebar.selectbox(
@@ -103,178 +218,178 @@ def main():
         max_value=0.9,
         value=0.5,
         step=0.05,
-        help="Minimum confidence score for detections"
+        help="Lower threshold catches more objects, higher threshold is more selective"
     )
     
-    # Main content area
-    tab1, tab2, tab3 = st.tabs(["📹 Video Upload", "📊 Analysis", "📱 Real-time"])
+    # Main content
+    tab1, tab2, tab3 = st.tabs(["📹 Upload Video", "📊 Results Analysis", "ℹ️ About"])
     
     with tab1:
-        st.header("Upload Video for Detection")
+        st.header("Upload Video for Object Detection")
         
         # File uploader
         uploaded_file = st.file_uploader(
             "Choose a video file",
             type=['mp4', 'avi', 'mov', 'mkv'],
-            help="Upload a video file to process with YOLO object detection"
+            help="Upload a video file to detect objects"
         )
         
         if uploaded_file is not None:
-            # Display video info
-            file_details = {
-                "Filename": uploaded_file.name,
-                "File size": f"{uploaded_file.size / (1024*1024):.2f} MB",
-                "File type": uploaded_file.type
-            }
-            
-            st.write("**File Details:**")
-            for key, value in file_details.items():
-                st.write(f"- {key}: {value}")
+            # Show file info
+            file_size = uploaded_file.size / (1024*1024)
+            st.info(f"📁 File: {uploaded_file.name} ({file_size:.2f} MB)")
             
             # Process button
-            if st.button("🚀 Process Video", type="primary"):
+            if st.button("🚀 Detect Objects", type="primary"):
                 with st.spinner("Processing video with YOLO..."):
-                    detector, summary, output_path = process_video_stream(
-                        uploaded_file, confidence_threshold
+                    summary, results, output_dir = process_video_stream(
+                        uploaded_file, confidence_threshold, model_option
                     )
                 
-                if detector and summary:
-                    st.success("Video processing completed!")
+                if summary:
+                    st.success("✅ Video processing completed!")
                     
-                    # Display results
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.metric("Total Frames", summary['total_frames'])
-                    
-                    with col2:
-                        st.metric("Total Detections", summary['total_detections'])
-                    
-                    with col3:
-                        st.metric("Processing Time", f"{summary['processing_time']:.2f}s")
-                    
-                    # Display processed video
-                    if os.path.exists(output_path):
-                        st.video(output_path)
-                        
-                        # Download button
-                        with open(output_path, "rb") as file:
-                            st.download_button(
-                                label="📥 Download Processed Video",
-                                data=file.read(),
-                                file_name="processed_video.mp4",
-                                mime="video/mp4"
-                            )
-                    
-                    # Store results in session state for analysis tab
-                    st.session_state.detector = detector
+                    # Store results in session state
                     st.session_state.summary = summary
+                    st.session_state.results = results
+                    st.session_state.output_dir = output_dir
+                    st.session_state.video_name = uploaded_file.name
+                    
+                    # Show quick summary
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Total Detections", summary['total_detections'])
+                    with col2:
+                        st.metric("Processing Time", f"{summary['processing_time']:.2f}s")
+                    with col3:
+                        st.metric("FPS", f"{summary['fps']:.1f}")
+                    with col4:
+                        st.metric("Model Used", model_option.split('.')[0])
+                else:
+                    st.error("❌ Processing failed. Please check the video file and try again.")
     
     with tab2:
-        st.header("Detection Analysis")
+        st.header("📊 Detection Results Analysis")
         
-        if 'detector' in st.session_state and 'summary' in st.session_state:
-            detector = st.session_state.detector
+        if 'summary' in st.session_state:
             summary = st.session_state.summary
             
-            # Detection statistics
+            # Detection summary
+            st.subheader("📈 Detection Summary")
             col1, col2 = st.columns(2)
             
             with col1:
-                st.subheader("Detection Summary")
                 st.markdown(f"""
                 <div class="metric-card">
-                    <h4>📊 Statistics</h4>
-                    <p><strong>Total Frames:</strong> {summary['total_frames']}</p>
-                    <p><strong>Total Detections:</strong> {summary['total_detections']}</p>
+                    <h4>Statistics</h4>
+                    <p><strong>Total Detections:</strong> {summary['total_detections']:,}</p>
                     <p><strong>Processing Time:</strong> {summary['processing_time']:.2f} seconds</p>
-                    <p><strong>FPS:</strong> {summary['total_frames'] / summary['processing_time']:.2f}</p>
+                    <p><strong>Total Frames:</strong> {summary['total_frames']:,}</p>
+                    <p><strong>FPS:</strong> {summary['fps']:.1f}</p>
+                    <p><strong>Model Used:</strong> {summary['model_used']}</p>
                 </div>
                 """, unsafe_allow_html=True)
             
             with col2:
                 st.subheader("Object Classes Detected")
                 if summary['class_counts']:
-                    # Create bar chart
-                    fig = px.bar(
-                        x=list(summary['class_counts'].keys()),
-                        y=list(summary['class_counts'].values()),
-                        title="Detections by Object Class",
-                        labels={'x': 'Object Class', 'y': 'Number of Detections'}
-                    )
-                    fig.update_layout(height=400)
-                    st.plotly_chart(fig, use_container_width=True)
+                    for class_name, count in sorted(summary['class_counts'].items(), key=lambda x: x[1], reverse=True):
+                        percentage = (count / summary['total_detections']) * 100
+                        st.write(f"**{class_name}**: {count:,} ({percentage:.1f}%)")
                 else:
-                    st.info("No detections found in the video.")
+                    st.info("No objects detected")
             
-            # Detection timeline
-            st.subheader("Detection Timeline")
-            if detector.detection_history:
-                # Create timeline data
-                timeline_data = []
-                for frame_data in detector.detection_history:
-                    if frame_data['detections']:
-                        for detection in frame_data['detections']:
-                            timeline_data.append({
-                                'Frame': frame_data['frame'],
-                                'Time (s)': frame_data['timestamp'],
-                                'Object': detection['class_name'],
-                                'Confidence': detection['confidence']
-                            })
-                
-                if timeline_data:
-                    df_timeline = pd.DataFrame(timeline_data)
-                    
-                    # Scatter plot of detections over time
-                    fig = px.scatter(
-                        df_timeline,
-                        x='Time (s)',
-                        y='Object',
-                        color='Confidence',
-                        size='Confidence',
-                        title="Detections Over Time",
-                        hover_data=['Frame', 'Confidence']
-                    )
-                    fig.update_layout(height=500)
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Detection frequency table
-                    st.subheader("Detection Frequency")
-                    detection_freq = df_timeline.groupby('Object').agg({
-                        'Frame': 'count',
-                        'Confidence': 'mean'
-                    }).rename(columns={'Frame': 'Count', 'Confidence': 'Avg Confidence'})
-                    st.dataframe(detection_freq.sort_values('Count', ascending=False))
+            # Charts
+            st.subheader("📊 Visualizations")
+            
+            # Detection chart
+            if summary['class_counts']:
+                chart = create_detection_chart(summary['class_counts'])
+                if chart:
+                    st.plotly_chart(chart, use_container_width=True)
+            
+            # Confidence distribution
+            if 'frame_analysis' in summary:
+                conf_chart = create_confidence_distribution(summary['frame_analysis'])
+                if conf_chart:
+                    st.plotly_chart(conf_chart, use_container_width=True)
+            
+            # Output files
+            st.subheader("📁 Output Files")
+            if 'output_dir' in st.session_state and os.path.exists(st.session_state.output_dir):
+                files = os.listdir(st.session_state.output_dir)
+                for file in files:
+                    if file.endswith('.mp4'):
+                        st.success(f"✅ Processed video saved: {st.session_state.output_dir}/{file}")
+                        st.info("You can download this file from your file system")
+            else:
+                st.warning("Output files not found")
         
         else:
-            st.info("Please process a video first to see analysis results.")
+            st.info("Please upload and process a video first to see results.")
     
     with tab3:
-        st.header("Real-time Detection")
+        st.header("ℹ️ About This System")
         
-        st.info("""
-        **Real-time Detection Features:**
-        - Live webcam feed with YOLO detection
-        - Real-time object tracking
-        - Instant detection results
+        st.markdown("""
+        ### 🎯 YOLO Video Object Detection System
+        
+        This system provides real-time object detection for video files using state-of-the-art YOLO (You Only Look Once) models.
+        
+        ### 🚀 Features
+        
+        - **Multiple Model Options**: Choose from different YOLO model sizes
+        - **Adjustable Confidence**: Fine-tune detection sensitivity
+        - **Real-time Processing**: Fast video processing with progress tracking
+        - **Comprehensive Analysis**: Detailed detection statistics and visualizations
+        - **Export Capabilities**: Save processed videos and detection results
+        
+        ### 📋 Supported Object Classes
+        
+        The system can detect 80+ object classes including:
+        - Vehicles (cars, trucks, buses, motorcycles)
+        - People and animals
+        - Common objects and items
+        - Construction equipment
+        
+        ### 🛠️ Technical Details
+        
+        - **Framework**: Ultralytics YOLO
+        - **Models**: YOLOv8 (nano, small, medium, large, xlarge)
+        - **Processing**: GPU-accelerated when available
+        - **Output**: Annotated videos with bounding boxes
+        
+        ### 🚀 How to Use
+        
+        1. Upload a video file (MP4, AVI, MOV, MKV)
+        2. Select appropriate model size
+        3. Adjust confidence threshold
+        4. Click "Detect Objects"
+        5. View results in the analysis tab
+        
+        ### 💡 Tips for Best Results
+        
+        - Use lower confidence thresholds (0.2-0.4) to catch more objects
+        - Try larger models (yolov8m, yolov8l, yolov8x) for better accuracy
+        - Check the processed video to verify detections
+        - Use appropriate model size for your hardware capabilities
+        
+        ### 🔧 Troubleshooting
+        
+        - **No detections**: Try lowering the confidence threshold
+        - **Slow processing**: Use smaller models or shorter videos
+        - **Memory issues**: Use smaller models or process shorter segments
+        - **File format issues**: Convert to MP4 format if needed
         """)
-        
-        # Webcam option
-        if st.button("📹 Start Webcam Detection", type="primary"):
-            st.warning("Real-time webcam detection requires camera access and will open in a separate window.")
-            st.info("Press 'q' to quit the webcam detection window.")
-            
-            # Note: In a real implementation, you would integrate webcam feed here
-            # For now, we'll show a placeholder
-            st.markdown("""
-            <div style="text-align: center; padding: 2rem;">
-                <h3>🔴 Webcam Detection</h3>
-                <p>Camera feed would be displayed here with real-time YOLO detections.</p>
-                <p>Press 'q' to quit detection.</p>
-            </div>
-            """, unsafe_allow_html=True)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style="text-align: center; padding: 1rem;">
+        <p><strong>YOLO Video Object Detection System</strong> | Powered by Ultralytics</p>
+        <p>For more information, visit the <a href="https://github.com/ultralytics/ultralytics" target="_blank">Ultralytics repository</a></p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    # Add missing import
-    import pandas as pd
-    main() 
+    main()

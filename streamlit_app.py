@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-YOLO Video Object Detection App - Streamlit Cloud Compatible Version
-Uses alternative approach to avoid OpenCV/NumPy compatibility issues
+Video Object Detection App - Complete Version
+With logo, real YOLO detection, and video download functionality
 """
 
 import streamlit as st
@@ -15,20 +15,36 @@ import plotly.express as px
 import plotly.graph_objects as go
 import base64
 from io import BytesIO
+import shutil
 
 # Page configuration
 st.set_page_config(
-    page_title="Video Object Detection",
+    page_title="Inteli AI - Video Object Detection",
     page_icon="🎥",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Custom CSS for better styling with logo
 st.markdown("""
 <style>
+    .logo-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 2rem;
+        padding: 1rem;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .logo-image {
+        width: 200px;
+        height: auto;
+        object-fit: contain;
+    }
     .main-header {
-        font-size: 3rem;
+        font-size: 2.5rem;
         color: #1f77b4;
         text-align: center;
         margin-bottom: 2rem;
@@ -66,24 +82,54 @@ st.markdown("""
         padding: 1rem;
         margin: 1rem 0;
     }
+    .footer {
+        text-align: center;
+        padding: 2rem;
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        margin-top: 3rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-def get_file_download_link(file_path, file_name, button_text):
-    """Generate a download link for a file"""
+def get_image_base64(image_path):
+    """Convert image to base64 for embedding in HTML"""
     try:
-        with open(file_path, "rb") as f:
-            data = f.read()
-        b64 = base64.b64encode(data).decode()
-        href = f'<a href="data:application/octet-stream;base64,{b64}" download="{file_name}">{button_text}</a>'
-        return href
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode()
+    except:
+        return ""
+
+def display_logo():
+    """Display the Inteli AI logo"""
+    try:
+        logo_path = "inteli-ai-black.webp"
+        if os.path.exists(logo_path):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.markdown("""
+                <div class="logo-container">
+                    <img src="data:image/webp;base64,{}" class="logo-image">
+                </div>
+                """.format(get_image_base64(logo_path)), unsafe_allow_html=True)
+        else:
+            st.warning("Logo file not found: inteli-ai-black.webp")
     except Exception as e:
-        st.error(f"Error creating download link: {e}")
-        return None
+        st.warning(f"Error loading logo: {e}")
+
+def get_available_models():
+    """Get list of available YOLO models"""
+    models = []
+    model_files = ['yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt']
+    
+    for model_file in model_files:
+        if os.path.exists(model_file):
+            models.append(model_file)
+    
+    return models
 
 def create_mock_detection_results(video_name, confidence_threshold=0.5):
-    """Create mock detection results for demonstration"""
-    # This is a placeholder - in a real implementation, you would use a working detection library
+    """Create mock detection results for demonstration when YOLO is not available"""
     import random
     
     # Mock classes that might be detected
@@ -131,32 +177,96 @@ def create_mock_detection_results(video_name, confidence_threshold=0.5):
         'video_name': video_name
     }
 
-def process_video_stream(video_file, confidence_threshold=0.5, model_name="mock"):
-    """Process uploaded video file - currently uses mock detection"""
+def process_video_with_yolo(video_path, confidence_threshold=0.5, model_name="yolov8n.pt"):
+    """Process video with real YOLO detection"""
+    try:
+        # Try to import ultralytics
+        from ultralytics import YOLO
+        
+        # Load model
+        model = YOLO(model_name)
+        
+        # Process video
+        start_time = time.time()
+        results = model.predict(
+            video_path,
+            conf=confidence_threshold,
+            save=True,
+            project="streamlit_results",
+            name="detections"
+        )
+        processing_time = time.time() - start_time
+        
+        # Analyze results
+        total_detections = 0
+        class_counts = {}
+        frame_analysis = {}
+        
+        for i, result in enumerate(results):
+            if result.boxes is not None:
+                detections_in_frame = len(result.boxes)
+                total_detections += detections_in_frame
+                
+                frame_detections = []
+                for box in result.boxes:
+                    class_id = int(box.cls[0].cpu().numpy())
+                    class_name = model.names[class_id]
+                    confidence_score = float(box.conf[0].cpu().numpy())
+                    
+                    # Count all detections
+                    class_counts[class_name] = class_counts.get(class_name, 0) + 1
+                    
+                    # Store frame-level detection
+                    frame_detections.append({
+                        'class': class_name,
+                        'confidence': confidence_score,
+                        'bbox': box.xyxy[0].cpu().numpy().tolist()
+                    })
+                
+                frame_analysis[i] = frame_detections
+        
+        # Create summary
+        summary = {
+            'total_detections': total_detections,
+            'total_frames': len(results),
+            'processing_time': processing_time,
+            'fps': len(results) / processing_time,
+            'class_counts': class_counts,
+            'frame_analysis': frame_analysis,
+            'model_used': model_name,
+            'video_name': os.path.basename(video_path)
+        }
+        
+        return summary, results, "streamlit_results/detections"
+        
+    except ImportError:
+        st.warning("⚠️ Ultralytics not available. Using mock detection.")
+        return None, None, None
+    except Exception as e:
+        st.error(f"Error with YOLO detection: {e}")
+        return None, None, None
+
+def process_video_stream(video_file, confidence_threshold=0.5, model_name="yolov8n.pt"):
+    """Process uploaded video file"""
     # Create temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
         tmp_file.write(video_file.read())
         temp_video_path = tmp_file.name
     
     try:
-        # For now, use mock detection since ultralytics has OpenCV dependency issues
-        start_time = time.time()
+        # Try real YOLO detection first
+        summary, results, output_dir = process_video_with_yolo(temp_video_path, confidence_threshold, model_name)
         
-        # Show warning about mock detection
-        st.warning("""
-        ⚠️ **Note**: Currently using mock detection results due to OpenCV compatibility issues on Streamlit Cloud.
-        
-        In a production environment, you would integrate with a working object detection library.
-        The mock results demonstrate the interface and visualization capabilities.
-        """)
-        
-        # Generate mock results
-        summary = create_mock_detection_results(video_file.name, confidence_threshold)
+        if summary is None:
+            # Fall back to mock detection
+            st.info("ℹ️ Using mock detection for demonstration purposes.")
+            summary = create_mock_detection_results(video_file.name, confidence_threshold)
+            output_dir = "mock_output"
         
         # Clean up temporary input file
         os.unlink(temp_video_path)
         
-        return summary, None, "mock_output"
+        return summary, results, output_dir
         
     except Exception as e:
         st.error(f"Error processing video: {e}")
@@ -244,19 +354,56 @@ def create_detection_timeline(frame_analysis):
     
     return fig
 
+def get_video_download_button(output_dir, video_name):
+    """Create download button for processed video"""
+    try:
+        if os.path.exists(output_dir):
+            # Look for the processed video file
+            for file in os.listdir(output_dir):
+                if file.endswith('.mp4'):
+                    video_path = os.path.join(output_dir, file)
+                    file_size = os.path.getsize(video_path) / (1024*1024)  # MB
+                    
+                    with open(video_path, "rb") as f:
+                        video_data = f.read()
+                    
+                    st.download_button(
+                        label=f"📹 Download Processed Video ({file_size:.1f} MB)",
+                        data=video_data,
+                        file_name=f"detected_{video_name}",
+                        mime="video/mp4"
+                    )
+                    return True
+        
+        return False
+    except Exception as e:
+        st.error(f"Error creating video download: {e}")
+        return False
+
 def main():
+    # Display logo
+    display_logo()
+    
     # Header
     st.markdown('<h1 class="main-header">🎥 Video Object Detection</h1>', unsafe_allow_html=True)
     
     # Sidebar
     st.sidebar.title("⚙️ Settings")
     
-    # Model selection (placeholder for now)
-    model_option = st.sidebar.selectbox(
-        "Detection Method",
-        ["Mock Detection", "YOLO (Coming Soon)", "Custom Model (Coming Soon)"],
-        help="Choose the detection method. Currently using mock detection for demonstration."
-    )
+    # Check available models
+    available_models = get_available_models()
+    
+    if available_models:
+        # Model selection
+        model_option = st.sidebar.selectbox(
+            "Select YOLO Model",
+            available_models,
+            help="Choose the YOLO model. Larger models are more accurate but slower."
+        )
+        st.sidebar.success(f"✅ {len(available_models)} YOLO model(s) available")
+    else:
+        model_option = "mock"
+        st.sidebar.warning("⚠️ No YOLO models found. Using mock detection.")
     
     # Confidence threshold
     confidence_threshold = st.sidebar.slider(
@@ -311,7 +458,7 @@ def main():
                     with col3:
                         st.metric("FPS", f"{summary['fps']:.1f}")
                     with col4:
-                        st.metric("Method Used", summary['model_used'])
+                        st.metric("Model Used", summary['model_used'])
                 else:
                     st.error("❌ Processing failed. Please check the video file and try again.")
     
@@ -333,7 +480,7 @@ def main():
                     <p><strong>Processing Time:</strong> {summary['processing_time']:.2f} seconds</p>
                     <p><strong>Total Frames:</strong> {summary['total_frames']:,}</p>
                     <p><strong>FPS:</strong> {summary['fps']:.1f}</p>
-                    <p><strong>Method Used:</strong> {summary['model_used']}</p>
+                    <p><strong>Model Used:</strong> {summary['model_used']}</p>
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -378,8 +525,14 @@ def main():
                 mime="application/json"
             )
             
-            # Mock video download (placeholder)
-            st.info("📹 Processed video download will be available when real detection is implemented")
+            # Video download
+            if 'output_dir' in st.session_state:
+                video_downloaded = get_video_download_button(
+                    st.session_state.output_dir, 
+                    st.session_state.video_name
+                )
+                if not video_downloaded:
+                    st.info("📹 Processed video will be available for download when using real YOLO detection")
         
         else:
             st.info("Please upload and process a video first to see results.")
@@ -388,68 +541,62 @@ def main():
         st.header("ℹ️ About This System")
         
         st.markdown("""
-        ### 🎯 Video Object Detection System
+        ### 🎯 Inteli AI Video Object Detection System
         
-        This system provides object detection for video files. Currently using mock detection for demonstration purposes.
+        This system provides advanced object detection for video files using state-of-the-art YOLO models.
         
         ### 🚀 Features
         
-        - **Multiple Detection Methods**: Support for different detection approaches
+        - **Real YOLO Detection**: Uses actual YOLO models when available
+        - **Multiple Model Support**: Choose from different YOLO model sizes
         - **Adjustable Confidence**: Fine-tune detection sensitivity
         - **Real-time Processing**: Fast video processing with progress tracking
         - **Comprehensive Analysis**: Detailed detection statistics and visualizations
-        - **Export Capabilities**: Save detection results as JSON
+        - **Export Capabilities**: Download processed videos and detection results
         
-        ### 📋 Current Status
+        ### 📋 Supported Object Classes
         
-        **⚠️ Mock Detection Mode**: Due to OpenCV compatibility issues on Streamlit Cloud, 
-        the system currently uses mock detection results to demonstrate the interface.
+        The system can detect 80+ object classes including:
+        - Vehicles (cars, trucks, buses, motorcycles)
+        - People and animals
+        - Common objects and items
+        - Construction equipment
         
-        ### 🔧 Technical Implementation Options
+        ### 🛠️ Technical Details
         
-        To implement real object detection, consider these alternatives:
+        - **Framework**: Ultralytics YOLO (when available)
+        - **Models**: YOLOv8 (nano, small, medium, large, xlarge)
+        - **Processing**: GPU-accelerated when available
+        - **Output**: Annotated videos with bounding boxes
         
-        1. **TensorFlow.js**: Browser-based detection (no server dependencies)
-        2. **ONNX Runtime**: Lightweight inference engine
-        3. **Custom Docker**: Containerized environment with compatible dependencies
-        4. **API Integration**: External detection service
-        
-        ### 🚀 How to Use (Current)
+        ### 🚀 How to Use
         
         1. Upload a video file (MP4, AVI, MOV, MKV)
-        2. Adjust confidence threshold
-        3. Click "Detect Objects"
-        4. View mock results and visualizations
-        5. Download JSON results
+        2. Select appropriate YOLO model
+        3. Adjust confidence threshold
+        4. Click "Detect Objects"
+        5. View results and download processed video
         
-        ### 💡 Future Enhancements
+        ### 💡 Tips for Best Results
         
-        - Real object detection integration
-        - Multiple model support
-        - Video processing with annotations
-        - Real-time streaming detection
-        - Custom model training interface
+        - Use lower confidence thresholds (0.2-0.4) to catch more objects
+        - Try larger models (yolov8m, yolov8l, yolov8x) for better accuracy
+        - Check the processed video to verify detections
+        - Use appropriate model size for your hardware capabilities
         
         ### 🔧 Troubleshooting
         
         - **No detections**: Try lowering the confidence threshold
+        - **Slow processing**: Use smaller models or shorter videos
+        - **Memory issues**: Use smaller models or process shorter segments
         - **File format issues**: Convert to MP4 format if needed
-        - **Performance issues**: Use shorter videos for testing
-        
-        ### 📞 Support
-        
-        For real object detection implementation, consider:
-        - Using a different hosting platform with full dependency support
-        - Implementing browser-based detection
-        - Using external API services
         """)
     
     # Footer
-    st.markdown("---")
     st.markdown("""
-    <div style="text-align: center; padding: 1rem;">
-        <p><strong>Video Object Detection System</strong> | Streamlit Cloud Compatible</p>
-        <p>Mock detection mode - Real detection coming soon!</p>
+    <div class="footer">
+        <p><strong>Inteli AI Video Object Detection System</strong></p>
+        <p>Powered by YOLO and Streamlit</p>
     </div>
     """, unsafe_allow_html=True)
 

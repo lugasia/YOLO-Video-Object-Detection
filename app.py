@@ -25,8 +25,8 @@ def check_dependencies():
         import ultralytics
         return True
     except ImportError:
-        st.error("❌ Ultralytics not found. Please check requirements_streamlit.txt")
-        st.info("💡 Make sure ultralytics is listed in requirements_streamlit.txt")
+        st.error("❌ Ultralytics not found. Please check requirements.txt")
+        st.info("💡 Make sure ultralytics is listed in requirements.txt")
         return False
 
 # Check dependencies are available

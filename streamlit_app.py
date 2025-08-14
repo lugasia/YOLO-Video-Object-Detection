@@ -1,31 +1,29 @@
 #!/usr/bin/env python3
 """
-Video Object Detection App - Complete Version
-With logo, real YOLO detection, and video download functionality
+YOLO Video Object Detection App with Inteli AI Logo
+Real YOLO implementation with YOLOv11 support - No Mock Detection
 """
 
 import streamlit as st
-import numpy as np
-import time
 import os
+import json
+import time
+from ultralytics import YOLO
 import tempfile
 from PIL import Image
-import json
-import plotly.express as px
-import plotly.graph_objects as go
-import base64
-from io import BytesIO
-import shutil
+import urllib.request
+import hashlib
+import cv2
+import numpy as np
 
 # Page configuration
 st.set_page_config(
-    page_title="InteliATE - Video Object Detection",
+    page_title="Inteli AI - YOLO Video Detection",
     page_icon="🎥",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# Custom CSS for better styling with logo
+# Custom CSS with logo styling
 st.markdown("""
 <style>
     .logo-container {
@@ -34,7 +32,7 @@ st.markdown("""
         justify-content: center;
         margin-bottom: 2rem;
         padding: 1rem;
-        background: white;
+        background: black;
         border-radius: 10px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
@@ -54,28 +52,9 @@ st.markdown("""
         padding: 1rem;
         border-radius: 0.5rem;
         border-left: 4px solid #1f77b4;
+        margin: 0.5rem 0;
     }
-    .detection-box {
-        border: 2px solid #1f77b4;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin: 1rem 0;
-    }
-    .success-box {
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin: 1rem 0;
-    }
-    .info-box {
-        background-color: #d1ecf1;
-        border: 1px solid #bee5eb;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin: 1rem 0;
-    }
-    .warning-box {
+    .construction-alert {
         background-color: #fff3cd;
         border: 1px solid #ffeaa7;
         border-radius: 0.5rem;
@@ -89,20 +68,28 @@ st.markdown("""
         border-radius: 10px;
         margin-top: 3rem;
     }
+    .model-status {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    .yolo11-badge {
+        background-color: #ff6b6b;
+        color: white;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.3rem;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-def get_image_base64(image_path):
-    """Convert image to base64 for embedding in HTML"""
-    try:
-        with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode()
-    except:
-        return ""
-
 def display_logo():
-    """Display the InteliATE logo"""
+    """Display the Inteli AI logo with original black background"""
     try:
+        # Load and display logo
         logo_path = "inteli-ai-black.webp"
         if os.path.exists(logo_path):
             col1, col2, col3 = st.columns([1, 2, 1])
@@ -113,132 +100,145 @@ def display_logo():
                 </div>
                 """.format(get_image_base64(logo_path)), unsafe_allow_html=True)
         else:
-            st.warning("Logo file not found: inteli-ai-black.webp")
+            st.error("Logo file not found: inteli-ai-black.webp")
     except Exception as e:
-        st.warning(f"Error loading logo: {e}")
+        st.error(f"Error loading logo: {e}")
 
-def get_available_models():
-    """Get list of available YOLO models, prioritizing smaller ones for Streamlit Cloud"""
-    models = []
-    # Prioritize smaller models that work better on Streamlit Cloud
-    model_files = ['yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt']
-    
-    for model_file in model_files:
-        if os.path.exists(model_file):
-            # Get file size for display
-            file_size = os.path.getsize(model_file) / (1024*1024)  # MB
-            
-            # Add indicator for Streamlit Cloud compatibility
-            if file_size <= 10:  # Models under 10MB work well on Streamlit Cloud
-                cloud_status = "☁️ Cloud Ready"
-            elif file_size <= 50:  # Medium models might work
-                cloud_status = "⚠️ May work on Cloud"
-            else:  # Large models won't work on Streamlit Cloud
-                cloud_status = "❌ Too large for Cloud"
-            
-            models.append(f"{model_file} ({file_size:.1f}MB) {cloud_status}")
-    
-    return models
+def get_image_base64(image_path):
+    """Convert image to base64 for embedding in HTML"""
+    import base64
+    try:
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode()
+    except:
+        return ""
 
-def get_model_filename(model_option):
-    """Extract the actual model filename from the display option"""
-    if "(" in model_option:
-        return model_option.split(" (")[0]
-    return model_option
-
-def get_cloud_compatible_models():
-    """Get models that are likely to work on Streamlit Cloud"""
-    cloud_models = []
-    model_files = ['yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt']
-    
-    for model_file in model_files:
-        if os.path.exists(model_file):
-            file_size = os.path.getsize(model_file) / (1024*1024)  # MB
-            if file_size <= 50:  # Models under 50MB
-                cloud_models.append(model_file)
-    
-    return cloud_models
-
-def create_mock_detection_results(video_name, confidence_threshold=0.5):
-    """Create mock detection results for demonstration when YOLO is not available"""
-    import random
-    
-    # Mock classes that might be detected
-    possible_classes = ['person', 'car', 'truck', 'bus', 'motorcycle', 'bicycle', 'dog', 'cat']
-    
-    # Generate mock results
-    total_frames = random.randint(30, 120)  # 1-4 seconds at 30fps
-    total_detections = 0
-    class_counts = {}
-    frame_analysis = {}
-    
-    for frame_id in range(total_frames):
-        # Random number of detections per frame
-        num_detections = random.randint(0, 3) if random.random() > 0.3 else 0
-        
-        frame_detections = []
-        for _ in range(num_detections):
-            class_name = random.choice(possible_classes)
-            confidence = random.uniform(confidence_threshold, 0.95)
-            
-            # Only count detections above threshold
-            if confidence >= confidence_threshold:
-                class_counts[class_name] = class_counts.get(class_name, 0) + 1
-                total_detections += 1
-                
-                frame_detections.append({
-                    'class': class_name,
-                    'confidence': confidence,
-                    'bbox': [random.uniform(0, 1) for _ in range(4)]  # Mock bbox
-                })
-        
-        if frame_detections:
-            frame_analysis[frame_id] = frame_detections
-    
-    processing_time = random.uniform(2.0, 8.0)
-    
+def get_construction_mapping():
+    """Get mapping for construction equipment"""
     return {
-        'total_detections': total_detections,
-        'total_frames': total_frames,
-        'processing_time': processing_time,
-        'fps': total_frames / processing_time,
-        'class_counts': class_counts,
-        'frame_analysis': frame_analysis,
-        'model_used': 'mock_detector',
-        'video_name': video_name
+        'train': '🚂 Train (Possible Excavator/Construction Equipment)',
+        'truck': '🚛 Truck (Possible Dump Truck/Construction Vehicle)',
+        'car': '🚗 Car/Vehicle',
+        'bus': '🚌 Bus',
+        'boat': '🚢 Boat',
+        'airplane': '✈️ Airplane',
+        'person': '👤 Person',
+        'motorcycle': '🏍️ Motorcycle',
+        'bicycle': '🚲 Bicycle'
     }
 
-def process_video_with_yolo(video_path, confidence_threshold=0.5, model_name="yolov8n.pt"):
+@st.cache_resource
+def download_yolo_model(model_name="yolov8n.pt"):
+    """Download and cache YOLO model automatically"""
+    # Create models directory if it doesn't exist
+    models_dir = "models"
+    os.makedirs(models_dir, exist_ok=True)
+    
+    model_path = os.path.join(models_dir, model_name)
+    
+    # Check if model already exists
+    if os.path.exists(model_path):
+        return model_path
+    
+    # Use YOLO's built-in download mechanism
+    try:
+        with st.spinner(f"📥 Downloading {model_name}..."):
+            model = YOLO(model_name)  # This will download automatically
+            return model_name  # Return the model name for YOLO to handle
+    except Exception as e:
+        st.error(f"❌ Failed to download {model_name}: {e}")
+        return None
+
+@st.cache_resource
+def load_yolo_model(model_name="yolov8n.pt"):
+    """Load YOLO model with automatic download"""
+    try:
+        # Load the model directly - YOLO will download if needed
+        with st.spinner(f"🔄 Loading {model_name}..."):
+            model = YOLO(model_name)
+        return model
+    except Exception as e:
+        st.error(f"Error loading model {model_name}: {e}")
+        return None
+
+def check_model_status():
+    """Check and display model availability status"""
+    # Check if any YOLO models are available in the default location
+    import torch
+    from pathlib import Path
+    
+    # Check default YOLO cache directory
+    cache_dir = Path.home() / ".cache" / "ultralytics"
+    models_dir = Path("models")
+    
+    available_models = []
+    all_models = ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
+                  "yolov11n.pt", "yolov11s.pt", "yolov11m.pt", "yolov11l.pt", "yolov11x.pt"]
+    
+    for model_name in all_models:
+        # Check multiple possible locations
+        possible_paths = [
+            models_dir / model_name,
+            cache_dir / model_name,
+            Path(model_name)
+        ]
+        
+        for path in possible_paths:
+            if path.exists():
+                size = path.stat().st_size / (1024 * 1024)  # Size in MB
+                version_badge = "YOLOv11" if "11" in model_name else "YOLOv8"
+                available_models.append(f"{model_name} ({size:.1f}MB) [{version_badge}]")
+                break
+    
+    if available_models:
+        st.markdown(f"""
+        <div class="model-status">
+            <h4>✅ Models Available</h4>
+            <p>Ready to use: {', '.join(available_models)}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("ℹ️ Models will be downloaded automatically when you first use them.")
+
+def process_video_with_yolo(video_file, confidence=0.5, model_name="yolov8n.pt"):
     """Process video with real YOLO detection"""
     try:
-        # Try to import ultralytics
-        from ultralytics import YOLO
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
+            tmp_file.write(video_file.read())
+            temp_path = tmp_file.name
         
-        # Load model
-        model = YOLO(model_name)
+        # Load model (will download automatically if needed)
+        model = load_yolo_model(model_name)
+        if model is None:
+            st.error("❌ Failed to load YOLO model")
+            return None, None
         
         # Process video
         start_time = time.time()
-        results = model.predict(
-            video_path,
-            conf=confidence_threshold,
-            save=True,
-            project="streamlit_results",
-            name="detections"
-        )
+        
+        with st.spinner(f"🎯 Processing video with {model_name}..."):
+            results = model.predict(
+                temp_path,
+                conf=confidence,
+                save=True,
+                project="inteli_ai_results",
+                name="detections"
+            )
+        
         processing_time = time.time() - start_time
         
         # Analyze results
         total_detections = 0
         class_counts = {}
-        frame_analysis = {}
+        construction_detections = {}
+        construction_mapping = get_construction_mapping()
         
         for i, result in enumerate(results):
             if result.boxes is not None:
                 detections_in_frame = len(result.boxes)
                 total_detections += detections_in_frame
                 
-                frame_detections = []
                 for box in result.boxes:
                     class_id = int(box.cls[0].cpu().numpy())
                     class_name = model.names[class_id]
@@ -247,249 +247,101 @@ def process_video_with_yolo(video_path, confidence_threshold=0.5, model_name="yo
                     # Count all detections
                     class_counts[class_name] = class_counts.get(class_name, 0) + 1
                     
-                    # Store frame-level detection
-                    frame_detections.append({
-                        'class': class_name,
-                        'confidence': confidence_score,
-                        'bbox': box.xyxy[0].cpu().numpy().tolist()
-                    })
-                
-                frame_analysis[i] = frame_detections
+                    # Focus on construction-related detections
+                    if class_name in construction_mapping:
+                        if class_name not in construction_detections:
+                            construction_detections[class_name] = []
+                        construction_detections[class_name].append({
+                            'frame': i,
+                            'confidence': confidence_score,
+                            'description': construction_mapping[class_name]
+                        })
         
-        # Create summary
-        summary = {
+        # Clean up temp file
+        os.unlink(temp_path)
+        
+        return {
             'total_detections': total_detections,
-            'total_frames': len(results),
-            'processing_time': processing_time,
-            'fps': len(results) / processing_time,
             'class_counts': class_counts,
-            'frame_analysis': frame_analysis,
+            'construction_detections': construction_detections,
+            'processing_time': processing_time,
+            'total_frames': len(results),
             'model_used': model_name,
-            'video_name': os.path.basename(video_path)
-        }
-        
-        return summary, results, "streamlit_results/detections"
-        
-    except ImportError:
-        st.warning("⚠️ Ultralytics not available. Using mock detection.")
-        return None, None, None
-    except Exception as e:
-        st.error(f"Error with YOLO detection: {e}")
-        return None, None, None
-
-def process_video_stream(video_file, confidence_threshold=0.5, model_name="yolov8n.pt"):
-    """Process uploaded video file"""
-    # Create temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
-        tmp_file.write(video_file.read())
-        temp_video_path = tmp_file.name
-    
-    try:
-        # Try real YOLO detection first
-        summary, results, output_dir = process_video_with_yolo(temp_video_path, confidence_threshold, model_name)
-        
-        if summary is None:
-            # Fall back to mock detection
-            st.info("ℹ️ Using mock detection for demonstration purposes.")
-            summary = create_mock_detection_results(video_file.name, confidence_threshold)
-            output_dir = "mock_output"
-        
-        # Clean up temporary input file
-        os.unlink(temp_video_path)
-        
-        return summary, results, output_dir
+            'model_version': 'YOLOv11' if '11' in model_name else 'YOLOv8'
+        }, results
         
     except Exception as e:
-        st.error(f"Error processing video: {e}")
-        if os.path.exists(temp_video_path):
-            os.unlink(temp_video_path)
-        return None, None, None
-
-def create_detection_chart(class_counts):
-    """Create a bar chart of detections"""
-    if not class_counts:
-        return None
-    
-    # Prepare data for plotting
-    classes = list(class_counts.keys())
-    counts = list(class_counts.values())
-    
-    # Create bar chart
-    fig = px.bar(
-        x=classes,
-        y=counts,
-        title="Object Detection Results",
-        labels={'x': 'Object Class', 'y': 'Number of Detections'},
-        color=counts,
-        color_continuous_scale='viridis'
-    )
-    
-    fig.update_layout(
-        xaxis_tickangle=-45,
-        height=400
-    )
-    
-    return fig
-
-def create_confidence_distribution(frame_analysis):
-    """Create confidence distribution chart"""
-    if not frame_analysis:
-        return None
-    
-    # Collect all confidence scores
-    confidences = []
-    for frame_data in frame_analysis.values():
-        for det in frame_data:
-            confidences.append(det['confidence'])
-    
-    if not confidences:
-        return None
-    
-    # Create histogram
-    fig = px.histogram(
-        x=confidences,
-        title="Confidence Score Distribution",
-        labels={'x': 'Confidence Score', 'y': 'Number of Detections'},
-        nbins=20
-    )
-    
-    fig.update_layout(height=400)
-    
-    return fig
-
-def create_detection_timeline(frame_analysis):
-    """Create a timeline of detections across frames"""
-    if not frame_analysis:
-        return None
-    
-    # Prepare data
-    frames = []
-    detection_counts = []
-    
-    for frame_id in sorted(frame_analysis.keys()):
-        frames.append(frame_id)
-        detection_counts.append(len(frame_analysis[frame_id]))
-    
-    if not frames:
-        return None
-    
-    # Create line chart
-    fig = px.line(
-        x=frames,
-        y=detection_counts,
-        title="Detections Over Time",
-        labels={'x': 'Frame Number', 'y': 'Number of Detections'}
-    )
-    
-    fig.update_layout(height=400)
-    
-    return fig
-
-def get_video_download_button(output_dir, video_name):
-    """Create download button for processed video"""
-    try:
-        if os.path.exists(output_dir):
-            # Look for the processed video file
-            for file in os.listdir(output_dir):
-                if file.endswith('.mp4'):
-                    video_path = os.path.join(output_dir, file)
-                    file_size = os.path.getsize(video_path) / (1024*1024)  # MB
-                    
-                    with open(video_path, "rb") as f:
-                        video_data = f.read()
-                    
-                    st.download_button(
-                        label=f"📹 Download Processed Video ({file_size:.1f} MB)",
-                        data=video_data,
-                        file_name=f"detected_{video_name}",
-                        mime="video/mp4"
-                    )
-                    return True
-        
-        return False
-    except Exception as e:
-        st.error(f"Error creating video download: {e}")
-        return False
+        st.error(f"❌ Error processing video: {e}")
+        return None, None
 
 def main():
-    # Display logo
+    # Display logo and header
     display_logo()
     
-    # Header
-    st.markdown('<h1 class="main-header">🎥 Video Object Detection</h1>', unsafe_allow_html=True)
+    # Main title
+    st.markdown('<h1 class="main-header">🎥 YOLO Video Object Detection System</h1>', unsafe_allow_html=True)
+    
+    # Check model status
+    check_model_status()
+    
+    # Important notice
+    st.markdown("""
+    <div class="construction-alert">
+        <h4>⚠️ Important Notice</h4>
+        <p>YOLO may classify construction equipment (excavators, bulldozers, etc.) as similar objects like "train" or "truck". 
+        This is normal behavior for general-purpose object detection models.</p>
+        <p><strong>💡 Tip:</strong> Look for "train" detections - these might actually be excavators!</p>
+        <p><strong>🚀 New:</strong> YOLOv11 models are now available for even better accuracy!</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Sidebar
     st.sidebar.title("⚙️ Settings")
     
-    # Check available models
-    available_models = get_available_models()
-    cloud_compatible_models = get_cloud_compatible_models()
+    # Model selection with YOLOv11 support
+    model_options = [
+        ("yolov8n.pt", "YOLOv8 Nano (6.2MB) - Fastest"),
+        ("yolov8s.pt", "YOLOv8 Small (21.5MB) - Balanced"),
+        ("yolov8m.pt", "YOLOv8 Medium (52.2MB) - Better Accuracy"),
+        ("yolov8l.pt", "YOLOv8 Large (87.7MB) - High Accuracy"),
+        ("yolov8x.pt", "YOLOv8 XLarge (136.2MB) - Best Accuracy"),
+        ("yolov11n.pt", "YOLOv11 Nano (7.1MB) - Latest & Fastest"),
+        ("yolov11s.pt", "YOLOv11 Small (22.1MB) - Latest & Balanced"),
+        ("yolov11m.pt", "YOLOv11 Medium (52.8MB) - Latest & Better"),
+        ("yolov11l.pt", "YOLOv11 Large (88.3MB) - Latest & High Accuracy"),
+        ("yolov11x.pt", "YOLOv11 XLarge (137.1MB) - Latest & Best")
+    ]
     
-    if available_models:
-        # Model selection
-        model_option = st.sidebar.selectbox(
-            "Select YOLO Model",
-            available_models,
-            help="Choose the YOLO model. Smaller models work better on Streamlit Cloud."
-        )
-        
-        # Show model info
-        model_filename = get_model_filename(model_option)
-        file_size = None
-        for model in available_models:
-            if model.startswith(model_filename):
-                # Extract file size
-                size_str = model.split("(")[1].split(")")[0]
-                file_size = float(size_str.replace("MB", ""))
-                break
-        
-        if file_size and file_size <= 10:
-            st.sidebar.success(f"✅ {len(available_models)} YOLO model(s) available")
-            st.sidebar.success(f"🎯 Selected: {model_filename} - Perfect for Streamlit Cloud!")
-        elif file_size and file_size <= 50:
-            st.sidebar.warning(f"⚠️ {len(available_models)} YOLO model(s) available")
-            st.sidebar.info(f"🎯 Selected: {model_filename} - May work on Streamlit Cloud")
-        else:
-            st.sidebar.warning(f"⚠️ {len(available_models)} YOLO model(s) available")
-            st.sidebar.error(f"❌ Selected: {model_filename} - Too large for Streamlit Cloud")
-        
-        # Show cloud compatibility info
-        if cloud_compatible_models:
-            st.sidebar.info(f"💡 Cloud-ready models: {', '.join(cloud_compatible_models)}")
-        
-    else:
-        model_option = "mock"
-        st.sidebar.error("❌ No YOLO models found")
-        st.sidebar.info("💡 Download models from: https://github.com/ultralytics/assets/releases")
-        st.sidebar.info("📦 Recommended: yolov8n.pt (6.2MB) for Streamlit Cloud")
+    model_option = st.sidebar.selectbox(
+        "Select YOLO Model",
+        options=[opt[0] for opt in model_options],
+        format_func=lambda x: next(opt[1] for opt in model_options if opt[0] == x),
+        help="YOLOv11 models are the latest and most accurate. Models download automatically."
+    )
+    
+    # Show YOLOv11 badge if selected
+    if "11" in model_option:
+        st.sidebar.markdown('<span class="yolo11-badge">🚀 YOLOv11</span>', unsafe_allow_html=True)
     
     # Confidence threshold
-    confidence_threshold = st.sidebar.slider(
+    confidence = st.sidebar.slider(
         "Confidence Threshold",
         min_value=0.1,
         max_value=0.9,
         value=0.5,
         step=0.05,
-        help="Lower threshold catches more objects, higher threshold is more selective"
+        help="Lower threshold catches more objects (including possible excavators)"
     )
     
+    # Model download info
+    st.sidebar.info("ℹ️ Models download automatically when first used")
+    
     # Main content
-    tab1, tab2, tab3 = st.tabs(["📹 Upload Video", "📊 Results Analysis", "ℹ️ About"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📹 Upload Video", "🚧 Construction Analysis", "📊 All Results", "ℹ️ About"])
     
     with tab1:
         st.header("Upload Video for Object Detection")
         
-        # Show model status
-        if available_models:
-            model_filename = get_model_filename(model_option)
-            if model_filename != "mock":
-                st.success(f"🚀 Ready to use: {model_filename}")
-            else:
-                st.warning("⚠️ Using mock detection - no real YOLO models available")
-        else:
-            st.error("❌ No YOLO models found - using mock detection")
-        
-        # File uploader
         uploaded_file = st.file_uploader(
             "Choose a video file",
             type=['mp4', 'avi', 'mov', 'mkv'],
@@ -503,176 +355,145 @@ def main():
             
             # Process button
             if st.button("🚀 Detect Objects", type="primary"):
-                with st.spinner("Processing video..."):
-                    # Get actual model filename for processing
-                    model_filename = get_model_filename(model_option)
-                    summary, results, output_dir = process_video_stream(
-                        uploaded_file, confidence_threshold, model_filename
+                with st.spinner(f"Processing video with {model_option}..."):
+                    results, raw_results = process_video_with_yolo(
+                        uploaded_file, confidence, model_option
                     )
                 
-                if summary:
+                if results:
                     st.success("✅ Video processing completed!")
                     
                     # Store results in session state
-                    st.session_state.summary = summary
                     st.session_state.results = results
-                    st.session_state.output_dir = output_dir
+                    st.session_state.raw_results = raw_results
                     st.session_state.video_name = uploaded_file.name
                     
                     # Show quick summary
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Total Detections", summary['total_detections'])
+                        st.metric("Total Detections", results['total_detections'])
                     with col2:
-                        st.metric("Processing Time", f"{summary['processing_time']:.2f}s")
+                        st.metric("Processing Time", f"{results['processing_time']:.2f}s")
                     with col3:
-                        st.metric("FPS", f"{summary['fps']:.1f}")
+                        fps = results['total_frames'] / results['processing_time']
+                        st.metric("FPS", f"{fps:.1f}")
                     with col4:
-                        st.metric("Model Used", summary['model_used'])
-                else:
-                    st.error("❌ Processing failed. Please check the video file and try again.")
+                        version_badge = "YOLOv11" if "11" in results['model_used'] else "YOLOv8"
+                        st.metric("Model", f"{results['model_used'].split('.')[0]} [{version_badge}]")
     
     with tab2:
-        st.header("📊 Detection Results Analysis")
+        st.header("🚧 Construction Equipment Analysis")
         
-        if 'summary' in st.session_state:
-            summary = st.session_state.summary
+        if 'results' in st.session_state:
+            results = st.session_state.results
+            construction_detections = results['construction_detections']
             
-            # Detection summary
-            st.subheader("📈 Detection Summary")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h4>Statistics</h4>
-                    <p><strong>Total Detections:</strong> {summary['total_detections']:,}</p>
-                    <p><strong>Processing Time:</strong> {summary['processing_time']:.2f} seconds</p>
-                    <p><strong>Total Frames:</strong> {summary['total_frames']:,}</p>
-                    <p><strong>FPS:</strong> {summary['fps']:.1f}</p>
-                    <p><strong>Model Used:</strong> {summary['model_used']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.subheader("Object Classes Detected")
-                if summary['class_counts']:
-                    for class_name, count in sorted(summary['class_counts'].items(), key=lambda x: x[1], reverse=True):
-                        percentage = (count / summary['total_detections']) * 100
-                        st.write(f"**{class_name}**: {count:,} ({percentage:.1f}%)")
-                else:
-                    st.info("No objects detected")
-            
-            # Charts
-            st.subheader("📊 Visualizations")
-            
-            # Detection chart
-            if summary['class_counts']:
-                chart = create_detection_chart(summary['class_counts'])
-                if chart:
-                    st.plotly_chart(chart, use_container_width=True)
-            
-            # Confidence distribution
-            if 'frame_analysis' in summary:
-                conf_chart = create_confidence_distribution(summary['frame_analysis'])
-                if conf_chart:
-                    st.plotly_chart(conf_chart, use_container_width=True)
+            if construction_detections:
+                st.subheader("🔍 Construction Equipment Detected")
                 
-                # Timeline chart
-                timeline_chart = create_detection_timeline(summary['frame_analysis'])
-                if timeline_chart:
-                    st.plotly_chart(timeline_chart, use_container_width=True)
-            
-            # Download section
-            st.subheader("📥 Download Results")
-            
-            # Create JSON results for download
-            json_data = json.dumps(summary, indent=2)
-            st.download_button(
-                label="📄 Download JSON Results",
-                data=json_data,
-                file_name=f"detection_results_{summary['video_name']}.json",
-                mime="application/json"
-            )
-            
-            # Video download
-            if 'output_dir' in st.session_state:
-                video_downloaded = get_video_download_button(
-                    st.session_state.output_dir, 
-                    st.session_state.video_name
-                )
-                if not video_downloaded:
-                    st.info("📹 Processed video will be available for download when using real YOLO detection")
-        
+                for class_name, detections in construction_detections.items():
+                    construction_mapping = get_construction_mapping()
+                    description = construction_mapping.get(class_name, class_name)
+                    
+                    with st.expander(f"{description} ({len(detections)} detections)"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write(f"**Total Detections:** {len(detections)}")
+                            
+                            # High confidence detections
+                            high_conf = [d for d in detections if d['confidence'] > 0.7]
+                            st.write(f"**High Confidence (>70%):** {len(high_conf)}")
+                            
+                            # Frame range
+                            frames = [d['frame'] for d in detections]
+                            if frames:
+                                st.write(f"**Frame Range:** {min(frames)} - {max(frames)}")
+                        
+                        with col2:
+                            # Show sample detections
+                            st.write("**Sample Detections:**")
+                            for i, detection in enumerate(detections[:5]):  # Show first 5
+                                st.write(f"Frame {detection['frame']}: {detection['confidence']:.2f}")
+            else:
+                st.info("No construction equipment detected. Try lowering the confidence threshold.")
         else:
-            st.info("Please upload and process a video first to see results.")
+            st.info("Upload and process a video first to see construction analysis.")
     
     with tab3:
-        st.header("ℹ️ About This System")
+        st.header("📊 Complete Detection Results")
+        
+        if 'results' in st.session_state:
+            results = st.session_state.results
+            class_counts = results['class_counts']
+            
+            if class_counts:
+                st.subheader("📈 Detection Statistics")
+                
+                # Display class counts
+                st.write("**Object Classes Detected:**")
+                for class_name, count in sorted(class_counts.items(), key=lambda x: x[1], reverse=True):
+                    st.write(f"• {class_name}: {count} detections")
+                
+                # Show processing info
+                st.subheader("⚙️ Processing Information")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Total Detections", results['total_detections'])
+                with col2:
+                    st.metric("Processing Time", f"{results['processing_time']:.2f}s")
+                with col3:
+                    st.metric("Model Used", results['model_used'])
+                with col4:
+                    version_badge = "YOLOv11" if "11" in results['model_used'] else "YOLOv8"
+                    st.metric("Version", version_badge)
+                
+                # Show results location
+                st.info("📁 Processed video saved in: `inteli_ai_results/detections/`")
+            else:
+                st.info("No objects detected. Try adjusting the confidence threshold.")
+        else:
+            st.info("Upload and process a video first to see complete results.")
+    
+    with tab4:
+        st.header("ℹ️ About Inteli AI")
         
         st.markdown("""
-        ### 🎯 InteliATE Video Object Detection Demo System
+        ### 🎯 Advanced Computer Vision Solutions
         
-        This system provides advanced object detection for video files using state-of-the-art YOLO models.
+        **Inteli AI** provides cutting-edge AI solutions for computer vision applications.
         
         ### 🚀 Features
+        - **Real-time Object Detection**: Using state-of-the-art YOLOv8 & YOLOv11 models
+        - **Construction Equipment Recognition**: Specialized detection for construction sites
+        - **Automatic Model Management**: Models download and cache automatically
+        - **Professional Interface**: Clean, modern UI with Inteli AI branding
         
-        - **Real YOLO Detection**: Uses actual YOLO models when available
-        - **Multiple Model Support**: Choose from different YOLO model sizes
-        - **Adjustable Confidence**: Fine-tune detection sensitivity
-        - **Real-time Processing**: Fast video processing with progress tracking
-        - **Comprehensive Analysis**: Detailed detection statistics and visualizations
-        - **Export Capabilities**: Download processed videos and detection results
+        ### 🛠️ Technology
+        - **YOLOv8 & YOLOv11**: Latest object detection models
+        - **Streamlit**: Modern web application framework
+        - **OpenCV**: Computer vision processing
+        - **Ultralytics**: YOLO framework
         
-        ### 📋 Supported Object Classes
+        ### 🆕 YOLOv11 Features
+        - **Improved Accuracy**: Better detection performance
+        - **Faster Processing**: Optimized inference speed
+        - **Enhanced Training**: Better model training capabilities
+        - **Latest Architecture**: State-of-the-art design
         
-        The system can detect 80+ object classes including:
-        - Vehicles (cars, trucks, buses, motorcycles)
-        - People and animals
-        - Common objects and items
-        - Construction equipment
+        ### 📞 Contact
+        - **Website**: [Inteli AI](https://inteliate.com)
+        - **Email**: support@inteli-ai.com
         
-        ### 🛠️ Technical Details
+        ---
         
-        - **Framework**: Ultralytics YOLO (when available)
-        - **Models**: YOLOv8 (nano, small, medium, large, xlarge)
-        - **Processing**: GPU-accelerated when available
-        - **Output**: Annotated videos with bounding boxes
-        
-        ### 🚀 How to Use
-        
-        1. Upload a video file (MP4, AVI, MOV, MKV)
-        2. Select appropriate YOLO model
-        3. Adjust confidence threshold
-        4. Click "Detect Objects"
-        5. View results and download processed video
-        
-        ### 💡 Tips for Best Results
-        
-        - Use lower confidence thresholds (0.2-0.4) to catch more objects
-        - Try larger models (yolov8m, yolov8l, yolov8x) for better accuracy
-        - Check the processed video to verify detections
-        - Use appropriate model size for your hardware capabilities
-        
-        ### 🔧 Troubleshooting
-        
-        - **No detections**: Try lowering the confidence threshold
-        - **Slow processing**: Use smaller models or shorter videos
-        - **Memory issues**: Use smaller models or process shorter segments
-        - **File format issues**: Convert to MP4 format if needed
-        
-        ### ☁️ Streamlit Cloud Compatibility
-        
-        - **Recommended models**: yolov8n.pt (6.2MB), yolov8s.pt (22MB)
-        - **Avoid large models**: yolov8x.pt (131MB) won't work on Streamlit Cloud
-        - **Download models**: https://github.com/ultralytics/assets/releases
+        **Made with ❤️ by Inteli AI**
         """)
     
     # Footer
     st.markdown("""
     <div class="footer">
-        <p><strong>InteliATE Video Object Detection Demo System</strong></p>
-        <p>Powered by YOLO and Streamlit</p>
+        <p>© 2024 Inteli AI - Advanced Computer Vision Solutions</p>
     </div>
     """, unsafe_allow_html=True)
 

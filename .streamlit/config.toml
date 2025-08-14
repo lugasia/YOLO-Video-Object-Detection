@@ -4,7 +4,7 @@ enableCORS = false
 enableXsrfProtection = false
 
 [build]
-python_version = "3.10"
+python_version = "3.9"
 
 [browser]
 gatherUsageStats = false

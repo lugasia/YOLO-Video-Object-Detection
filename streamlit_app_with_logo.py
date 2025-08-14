@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 YOLO Video Object Detection App with Inteli AI Logo
-Enhanced version with company branding
+Enhanced version with company branding and automatic model download
 """
 
 import streamlit as st
@@ -11,6 +11,8 @@ import time
 from ultralytics import YOLO
 import tempfile
 from PIL import Image
+import urllib.request
+import hashlib
 
 # Page configuration
 st.set_page_config(
@@ -28,7 +30,7 @@ st.markdown("""
         justify-content: center;
         margin-bottom: 2rem;
         padding: 1rem;
-        background: white;
+        background: black;
         border-radius: 10px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
@@ -63,6 +65,13 @@ st.markdown("""
         background-color: #f8f9fa;
         border-radius: 10px;
         margin-top: 3rem;
+    }
+    .model-status {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -108,14 +117,91 @@ def get_construction_mapping():
         'bicycle': '🚲 Bicycle'
     }
 
+@st.cache_resource
+def download_yolo_model(model_name="yolov8n.pt"):
+    """Download and cache YOLO model automatically"""
+    model_urls = {
+        "yolov8n.pt": "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt",
+        "yolov8s.pt": "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.pt",
+        "yolov8m.pt": "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8m.pt",
+        "yolov8l.pt": "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8l.pt",
+        "yolov8x.pt": "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x.pt"
+    }
+    
+    model_sizes = {
+        "yolov8n.pt": "6.2MB",
+        "yolov8s.pt": "21.5MB", 
+        "yolov8m.pt": "52.2MB",
+        "yolov8l.pt": "87.7MB",
+        "yolov8x.pt": "136.2MB"
+    }
+    
+    # Create models directory if it doesn't exist
+    models_dir = "models"
+    os.makedirs(models_dir, exist_ok=True)
+    
+    model_path = os.path.join(models_dir, model_name)
+    
+    # Check if model already exists
+    if os.path.exists(model_path):
+        return model_path
+    
+    # Download model if it doesn't exist
+    if model_name in model_urls:
+        url = model_urls[model_name]
+        size = model_sizes[model_name]
+        
+        try:
+            with st.spinner(f"📥 Downloading {model_name} ({size})..."):
+                urllib.request.urlretrieve(url, model_path)
+            st.success(f"✅ {model_name} downloaded successfully!")
+            return model_path
+        except Exception as e:
+            st.error(f"❌ Failed to download {model_name}: {e}")
+            return None
+    
+    return None
+
+@st.cache_resource
 def load_yolo_model(model_name="yolov8n.pt"):
-    """Load YOLO model"""
+    """Load YOLO model with automatic download"""
     try:
-        model = YOLO(model_name)
+        # First, ensure model is downloaded
+        model_path = download_yolo_model(model_name)
+        if model_path is None:
+            st.error(f"Could not download {model_name}")
+            return None
+        
+        # Load the model
+        with st.spinner(f"🔄 Loading {model_name}..."):
+            model = YOLO(model_path)
+        
         return model
     except Exception as e:
         st.error(f"Error loading model: {e}")
         return None
+
+def check_model_status():
+    """Check and display model availability status"""
+    models_dir = "models"
+    os.makedirs(models_dir, exist_ok=True)
+    
+    available_models = []
+    for model_name in ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"]:
+        model_path = os.path.join(models_dir, model_name)
+        if os.path.exists(model_path):
+            size = os.path.getsize(model_path) / (1024 * 1024)  # Size in MB
+            available_models.append(f"{model_name} ({size:.1f}MB)")
+    
+    if available_models:
+        st.markdown(f"""
+        <div class="model-status">
+            <h4>✅ Models Available</h4>
+            <p>Ready to use: {', '.join(available_models)}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.warning("⚠️ No models downloaded yet. Models will be downloaded automatically when needed.")
 
 def process_video_for_excavators(video_file, confidence=0.5, model_name="yolov8n.pt"):
     """Process video with focus on construction equipment"""
@@ -125,7 +211,7 @@ def process_video_for_excavators(video_file, confidence=0.5, model_name="yolov8n
             tmp_file.write(video_file.read())
             temp_path = tmp_file.name
         
-        # Load model
+        # Load model (will download automatically if needed)
         model = load_yolo_model(model_name)
         if model is None:
             return None, None
@@ -193,6 +279,9 @@ def main():
     # Main title
     st.markdown('<h1 class="main-header">🎥 YOLO Video Object Detection System</h1>', unsafe_allow_html=True)
     
+    # Check model status
+    check_model_status()
+    
     # Important notice
     st.markdown("""
     <div class="construction-alert">
@@ -210,7 +299,7 @@ def main():
     model_option = st.sidebar.selectbox(
         "Select YOLO Model",
         ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"],
-        help="Larger models are more accurate but slower"
+        help="Larger models are more accurate but slower. Models download automatically."
     )
     
     # Confidence threshold
@@ -222,6 +311,14 @@ def main():
         step=0.05,
         help="Lower threshold catches more objects (including possible excavators)"
     )
+    
+    # Model download button
+    if st.sidebar.button("📥 Download All Models", help="Download all YOLO models for offline use"):
+        with st.spinner("Downloading all models..."):
+            for model_name in ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"]:
+                download_yolo_model(model_name)
+        st.success("All models downloaded successfully!")
+        st.rerun()
     
     # Main content
     tab1, tab2, tab3, tab4 = st.tabs(["📹 Upload Video", "🚧 Construction Analysis", "📊 All Results", "ℹ️ About"])
@@ -299,183 +396,78 @@ def main():
                         with col2:
                             # Show sample detections
                             st.write("**Sample Detections:**")
-                            for det in detections[:5]:
-                                st.write(f"Frame {det['frame']}: {det['confidence']:.3f}")
-                        
-                        # Special note for train detections
-                        if class_name == 'train':
-                            st.warning("""
-                            🚂 **Note:** These 'train' detections might actually be **excavators** or other construction equipment!
-                            YOLOv8 often misclassifies large construction machinery as trains due to similar visual characteristics.
-                            """)
-                
-                # Download button for construction analysis
-                st.subheader("📥 Download Processed Video")
-                output_path = "inteli_ai_results/detections"
-                if os.path.exists(output_path):
-                    files = [f for f in os.listdir(output_path) if f.endswith('.mp4')]
-                    if files:
-                        video_file_path = os.path.join(output_path, files[0])
-                        if os.path.exists(video_file_path):
-                            with open(video_file_path, "rb") as video_file:
-                                video_bytes = video_file.read()
-                            
-                            col1, col2 = st.columns([2, 1])
-                            with col1:
-                                st.download_button(
-                                    label="🎬 Download Detected Video",
-                                    data=video_bytes,
-                                    file_name=f"construction_detection_{st.session_state.get('video_name', 'video.mp4')}",
-                                    mime="video/mp4",
-                                    help="Download the processed video with construction equipment detection"
-                                )
-                            with col2:
-                                file_size_mb = len(video_bytes) / (1024 * 1024)
-                                st.metric("File Size", f"{file_size_mb:.1f} MB")
-                        else:
-                            st.warning("Video file not found")
-                    else:
-                        st.warning("No processed video found")
-                else:
-                    st.warning("Output directory not found")
+                            for i, detection in enumerate(detections[:5]):  # Show first 5
+                                st.write(f"Frame {detection['frame']}: {detection['confidence']:.2f}")
             else:
                 st.info("No construction equipment detected. Try lowering the confidence threshold.")
         else:
-            st.info("Please upload and process a video first to see construction analysis.")
+            st.info("Upload and process a video first to see construction analysis.")
     
     with tab3:
-        st.header("📊 All Detection Results")
+        st.header("📊 Complete Detection Results")
         
         if 'results' in st.session_state:
             results = st.session_state.results
+            class_counts = results['class_counts']
             
-            # Detection summary
-            st.subheader("📈 Detection Summary")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h4>Statistics</h4>
-                    <p><strong>Total Detections:</strong> {results['total_detections']:,}</p>
-                    <p><strong>Processing Time:</strong> {results['processing_time']:.2f} seconds</p>
-                    <p><strong>Total Frames:</strong> {results['total_frames']:,}</p>
-                    <p><strong>FPS:</strong> {results['total_frames'] / results['processing_time']:.1f}</p>
-                    <p><strong>Model Used:</strong> {results['model_used']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.subheader("All Objects Detected")
-                if results['class_counts']:
-                    for class_name, count in sorted(results['class_counts'].items(), key=lambda x: x[1], reverse=True):
-                        percentage = (count / results['total_detections']) * 100
-                        st.write(f"**{class_name}**: {count:,} ({percentage:.1f}%)")
-                else:
-                    st.info("No objects detected")
-            
-            # Show output file location and download button
-            st.subheader("📁 Output Files")
-            output_path = "inteli_ai_results/detections"
-            if os.path.exists(output_path):
-                files = os.listdir(output_path)
-                for file in files:
-                    if file.endswith('.mp4'):
-                        st.success(f"✅ Processed video saved: {output_path}/{file}")
-                        
-                        # Download button for the processed video
-                        video_file_path = os.path.join(output_path, file)
-                        if os.path.exists(video_file_path):
-                            with open(video_file_path, "rb") as video_file:
-                                video_bytes = video_file.read()
-                                
-                            # Create download button
-                            st.download_button(
-                                label="📥 Download Detected Video",
-                                data=video_bytes,
-                                file_name=f"detected_{st.session_state.get('video_name', 'video.mp4')}",
-                                mime="video/mp4",
-                                help="Download the processed video with object detection annotations"
-                            )
-                            
-                            # Show file info
-                            file_size_mb = len(video_bytes) / (1024 * 1024)
-                            st.info(f"📊 File size: {file_size_mb:.2f} MB")
-                        else:
-                            st.warning("Video file not found")
+            if class_counts:
+                st.subheader("📈 Detection Statistics")
                 
-                # Download JSON results
-                st.subheader("📊 Download Detection Results")
-                results_json = json.dumps(results, indent=2)
-                st.download_button(
-                    label="📄 Download JSON Results",
-                    data=results_json,
-                    file_name=f"detection_results_{st.session_state.get('video_name', 'video').replace('.', '_')}.json",
-                    mime="application/json",
-                    help="Download detailed detection results in JSON format"
-                )
+                # Display class counts
+                st.write("**Object Classes Detected:**")
+                for class_name, count in sorted(class_counts.items(), key=lambda x: x[1], reverse=True):
+                    st.write(f"• {class_name}: {count} detections")
+                
+                # Show processing info
+                st.subheader("⚙️ Processing Information")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Detections", results['total_detections'])
+                with col2:
+                    st.metric("Processing Time", f"{results['processing_time']:.2f}s")
+                with col3:
+                    st.metric("Model Used", results['model_used'])
+                
+                # Show results location
+                st.info("📁 Processed video saved in: `inteli_ai_results/detections/`")
             else:
-                st.warning("Output files not found")
-        
+                st.info("No objects detected. Try adjusting the confidence threshold.")
         else:
-            st.info("Please upload and process a video first to see results.")
+            st.info("Upload and process a video first to see complete results.")
     
     with tab4:
         st.header("ℹ️ About Inteli AI")
         
         st.markdown("""
-        ### 🚀 About Inteli AI
+        ### 🎯 Advanced Computer Vision Solutions
         
-        **Inteli AI** is a leading artificial intelligence company specializing in computer vision and object detection solutions.
+        **Inteli AI** provides cutting-edge AI solutions for computer vision applications.
         
-        ### 🎯 Our YOLO Video Detection System
-        
-        This system provides:
+        ### 🚀 Features
         - **Real-time Object Detection**: Using state-of-the-art YOLOv8 models
         - **Construction Equipment Recognition**: Specialized detection for construction sites
-        - **High Accuracy**: Optimized parameters for minimal false positives
-        - **User-Friendly Interface**: Easy-to-use web application
+        - **Automatic Model Management**: Models download and cache automatically
+        - **Professional Interface**: Clean, modern UI with Inteli AI branding
         
-        ### 🛠️ Technical Features
-        
-        - **Multiple Model Options**: From fast nano models to high-accuracy large models
-        - **Adjustable Confidence**: Fine-tune detection sensitivity
-        - **Comprehensive Analysis**: Detailed detection statistics and visualizations
-        - **Export Capabilities**: Save processed videos and detection results
-        
-        ### 📋 Supported Object Classes
-        
-        The system can detect 80+ object classes including:
-        - Construction equipment (trucks, excavators, bulldozers)
-        - Vehicles (cars, buses, motorcycles)
-        - People and animals
-        - Common objects and items
-        
-        ### 🚀 How to Use
-        
-        1. Upload a video file (MP4, AVI, MOV, MKV)
-        2. Select appropriate model size
-        3. Adjust confidence threshold (lower = more detections)
-        4. Click "Detect Objects"
-        5. View results in the analysis tabs
-        
-        ### 💡 Tips for Best Results
-        
-        - Use lower confidence thresholds (0.2-0.4) to catch more objects
-        - Try larger models (yolov8m, yolov8l, yolov8x) for better accuracy
-        - Look for "train" detections - these might be excavators!
-        - Check high-confidence detections for better accuracy
+        ### 🛠️ Technology
+        - **YOLOv8**: Latest object detection models
+        - **Streamlit**: Modern web application framework
+        - **OpenCV**: Computer vision processing
+        - **Ultralytics**: YOLO framework
         
         ### 📞 Contact
+        - **Website**: [Inteli AI](https://inteliate.com)
+        - **Email**: support@inteli-ai.com
         
-        For more information about Inteli AI solutions, please visit our website or contact our team.
+        ---
+        
+        **Made with ❤️ by Inteli AI**
         """)
     
     # Footer
     st.markdown("""
     <div class="footer">
-        <p><strong>Powered by Inteli AI</strong> | Advanced Computer Vision Solutions</p>
-        <p>YOLO Video Object Detection System v2.0</p>
+        <p>© 2024 Inteli AI - Advanced Computer Vision Solutions</p>
     </div>
     """, unsafe_allow_html=True)
 

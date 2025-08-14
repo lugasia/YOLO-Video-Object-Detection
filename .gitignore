@@ -50,6 +50,7 @@ Thumbs.db
 
 # Model files (too large for GitHub)
 *.pt
+models/*.pt
 
 # Results and output directories
 *_results/

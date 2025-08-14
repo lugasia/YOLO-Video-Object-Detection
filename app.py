@@ -11,7 +11,7 @@ import time
 import tempfile
 import base64
 
-# Page configuration
+# Page configuration - Updated for latest deployment
 st.set_page_config(
     page_title="Inteli AI - YOLO Video Detection",
     page_icon="🎥",

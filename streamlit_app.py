@@ -118,15 +118,25 @@ def display_logo():
         st.warning(f"Error loading logo: {e}")
 
 def get_available_models():
-    """Get list of available YOLO models"""
+    """Get list of available YOLO models, prioritizing smaller ones for Streamlit Cloud"""
     models = []
+    # Prioritize smaller models that work better on Streamlit Cloud
     model_files = ['yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt']
     
     for model_file in model_files:
         if os.path.exists(model_file):
             # Get file size for display
             file_size = os.path.getsize(model_file) / (1024*1024)  # MB
-            models.append(f"{model_file} ({file_size:.1f}MB)")
+            
+            # Add indicator for Streamlit Cloud compatibility
+            if file_size <= 10:  # Models under 10MB work well on Streamlit Cloud
+                cloud_status = "☁️ Cloud Ready"
+            elif file_size <= 50:  # Medium models might work
+                cloud_status = "⚠️ May work on Cloud"
+            else:  # Large models won't work on Streamlit Cloud
+                cloud_status = "❌ Too large for Cloud"
+            
+            models.append(f"{model_file} ({file_size:.1f}MB) {cloud_status}")
     
     return models
 
@@ -135,6 +145,19 @@ def get_model_filename(model_option):
     if "(" in model_option:
         return model_option.split(" (")[0]
     return model_option
+
+def get_cloud_compatible_models():
+    """Get models that are likely to work on Streamlit Cloud"""
+    cloud_models = []
+    model_files = ['yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt']
+    
+    for model_file in model_files:
+        if os.path.exists(model_file):
+            file_size = os.path.getsize(model_file) / (1024*1024)  # MB
+            if file_size <= 50:  # Models under 50MB
+                cloud_models.append(model_file)
+    
+    return cloud_models
 
 def create_mock_detection_results(video_name, confidence_threshold=0.5):
     """Create mock detection results for demonstration when YOLO is not available"""
@@ -400,23 +423,45 @@ def main():
     
     # Check available models
     available_models = get_available_models()
+    cloud_compatible_models = get_cloud_compatible_models()
     
     if available_models:
         # Model selection
         model_option = st.sidebar.selectbox(
             "Select YOLO Model",
             available_models,
-            help="Choose the YOLO model. Larger models are more accurate but slower."
+            help="Choose the YOLO model. Smaller models work better on Streamlit Cloud."
         )
-        st.sidebar.success(f"✅ {len(available_models)} YOLO model(s) available")
         
         # Show model info
         model_filename = get_model_filename(model_option)
-        st.sidebar.info(f"Selected: {model_filename}")
+        file_size = None
+        for model in available_models:
+            if model.startswith(model_filename):
+                # Extract file size
+                size_str = model.split("(")[1].split(")")[0]
+                file_size = float(size_str.replace("MB", ""))
+                break
+        
+        if file_size and file_size <= 10:
+            st.sidebar.success(f"✅ {len(available_models)} YOLO model(s) available")
+            st.sidebar.success(f"🎯 Selected: {model_filename} - Perfect for Streamlit Cloud!")
+        elif file_size and file_size <= 50:
+            st.sidebar.warning(f"⚠️ {len(available_models)} YOLO model(s) available")
+            st.sidebar.info(f"🎯 Selected: {model_filename} - May work on Streamlit Cloud")
+        else:
+            st.sidebar.warning(f"⚠️ {len(available_models)} YOLO model(s) available")
+            st.sidebar.error(f"❌ Selected: {model_filename} - Too large for Streamlit Cloud")
+        
+        # Show cloud compatibility info
+        if cloud_compatible_models:
+            st.sidebar.info(f"💡 Cloud-ready models: {', '.join(cloud_compatible_models)}")
+        
     else:
         model_option = "mock"
-        st.sidebar.warning("⚠️ No YOLO models found. Using mock detection.")
-        st.sidebar.info("💡 Models may be available locally but not on Streamlit Cloud")
+        st.sidebar.error("❌ No YOLO models found")
+        st.sidebar.info("💡 Download models from: https://github.com/ultralytics/assets/releases")
+        st.sidebar.info("📦 Recommended: yolov8n.pt (6.2MB) for Streamlit Cloud")
     
     # Confidence threshold
     confidence_threshold = st.sidebar.slider(
@@ -433,6 +478,16 @@ def main():
     
     with tab1:
         st.header("Upload Video for Object Detection")
+        
+        # Show model status
+        if available_models:
+            model_filename = get_model_filename(model_option)
+            if model_filename != "mock":
+                st.success(f"🚀 Ready to use: {model_filename}")
+            else:
+                st.warning("⚠️ Using mock detection - no real YOLO models available")
+        else:
+            st.error("❌ No YOLO models found - using mock detection")
         
         # File uploader
         uploaded_file = st.file_uploader(
@@ -605,6 +660,12 @@ def main():
         - **Slow processing**: Use smaller models or shorter videos
         - **Memory issues**: Use smaller models or process shorter segments
         - **File format issues**: Convert to MP4 format if needed
+        
+        ### ☁️ Streamlit Cloud Compatibility
+        
+        - **Recommended models**: yolov8n.pt (6.2MB), yolov8s.pt (22MB)
+        - **Avoid large models**: yolov8x.pt (131MB) won't work on Streamlit Cloud
+        - **Download models**: https://github.com/ultralytics/assets/releases
         """)
     
     # Footer

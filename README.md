@@ -2,7 +2,7 @@
 
 **Powered by Inteli AI** - Advanced Computer Vision Solutions
 
-A clean, production-ready video object detection system using YOLOv8 and YOLOv11 with automatic model downloads.
+A clean, production-ready video object detection system using YOLOv8 with automatic model downloads.
 
 ![Inteli AI Logo](inteli-ai-black.webp)
 
@@ -35,7 +35,7 @@ streamlit run app.py
 
 ## ✨ Features
 
-- **🎯 Real-time Object Detection**: Using YOLOv8 and YOLOv11 models
+- **🎯 Real-time Object Detection**: Using YOLOv8 models
 - **🚧 Construction Equipment Recognition**: Specialized detection for construction sites
 - **📥 Automatic Model Downloads**: Models download automatically when first used
 - **🎨 Professional UI**: Clean interface with Inteli AI branding
@@ -43,7 +43,7 @@ streamlit run app.py
 
 ## 🛠️ Technology
 
-- **YOLOv8 & YOLOv11**: Latest object detection models
+- **YOLOv8**: Latest object detection models
 - **Streamlit**: Modern web application framework
 - **OpenCV Headless**: Computer vision processing (no GUI dependencies)
 - **Ultralytics**: YOLO framework
@@ -63,7 +63,7 @@ YOLO-Video-Object-Detection/
 ## 🎯 Supported Models
 
 - **YOLOv8**: Nano, Small, Medium, Large, XLarge
-- **YOLOv11**: Nano, Small, Medium, Large, XLarge
+- **YOLOv8**: Nano, Small, Medium, Large, XLarge
 
 ## 🔧 Configuration
 

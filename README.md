@@ -10,6 +10,16 @@ A comprehensive video object detection system using YOLOv8, featuring real-time 
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-streamlit-app-url.streamlit.app)
 
+## ✅ Status: WORKING
+
+**🎉 SUCCESS: Real YOLO detection is now working!**
+
+- ✅ **Real YOLO Models**: No more mock detection
+- ✅ **Automatic Downloads**: Models download automatically
+- ✅ **YOLOv11 Support**: Latest models available
+- ✅ **Professional UI**: Inteli AI branding
+- ✅ **Ready for Deployment**: Streamlit Cloud compatible
+
 ## ✨ Features
 
 - **🎯 Real-time Object Detection**: Using state-of-the-art YOLOv8 models
@@ -60,7 +70,7 @@ The system can detect 80+ object classes including:
 
 4. **Run the application**
    ```bash
-   streamlit run streamlit_app_with_logo.py
+   streamlit run streamlit_app_main.py
    ```
 
 5. **Open your browser**
@@ -73,7 +83,7 @@ The system can detect 80+ object classes including:
 3. **Connect your GitHub account**
 4. **Deploy the app**:
    - Repository: `your-username/YOLO-Video-Object-Detection`
-   - Main file path: `streamlit_app_with_logo.py`
+   - Main file path: `streamlit_app_main.py`
    - Python version: 3.8+
 
 ## 📖 Usage Guide
@@ -83,9 +93,10 @@ The system can detect 80+ object classes including:
 - Maximum file size: 200MB (Streamlit Cloud limit)
 
 ### 2. Configure Settings
-- **Model Selection**: Choose from YOLOv8 nano to xlarge models
+- **Model Selection**: Choose from YOLOv8 and YOLOv11 models (nano to xlarge)
 - **Confidence Threshold**: Adjust detection sensitivity (0.1-0.9)
 - **Processing Options**: Real-time or batch processing
+- **Automatic Downloads**: Models download automatically when first used
 
 ### 3. View Results
 - **Construction Analysis**: Specialized equipment detection
@@ -108,7 +119,7 @@ The system can detect 80+ object classes including:
 
 ```
 YOLO-Video-Object-Detection/
-├── streamlit_app_with_logo.py    # Main Streamlit application
+├── streamlit_app_main.py        # Main Streamlit application (WORKING)
 ├── requirements.txt              # Python dependencies
 ├── inteli-ai-black.webp         # Company logo
 ├── README.md                    # This file
@@ -132,11 +143,18 @@ DEFAULT_CONFIDENCE=0.5
 ```
 
 ### Model Options
-- **yolov8n.pt**: Fastest, smallest (recommended for testing)
-- **yolov8s.pt**: Small, balanced
-- **yolov8m.pt**: Medium, better accuracy
-- **yolov8l.pt**: Large, high accuracy
-- **yolov8x.pt**: XLarge, best accuracy
+- **YOLOv8 Models**:
+  - **yolov8n.pt**: Fastest, smallest (recommended for testing)
+  - **yolov8s.pt**: Small, balanced
+  - **yolov8m.pt**: Medium, better accuracy
+  - **yolov8l.pt**: Large, high accuracy
+  - **yolov8x.pt**: XLarge, best accuracy
+- **YOLOv11 Models** (Latest):
+  - **yolov11n.pt**: Latest nano, fastest
+  - **yolov11s.pt**: Latest small, balanced
+  - **yolov11m.pt**: Latest medium, better accuracy
+  - **yolov11l.pt**: Latest large, high accuracy
+  - **yolov11x.pt**: Latest xlarge, best accuracy
 
 ## 📊 Performance Metrics
 
